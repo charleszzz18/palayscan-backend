@@ -2,7 +2,8 @@ Flask==3.0.0
 flask-cors==4.0.0
 opencv-python-headless==4.8.1.78
 numpy==1.26.2
-mariadb==1.1.8
+pymysql==1.1.1
+cryptography==41.0.7
 Werkzeug==3.0.1
 tensorflow==2.15.0
 gunicorn==21.2.0

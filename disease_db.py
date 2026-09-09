@@ -6,7 +6,7 @@
 # admin-level actions. Written with clean error boundaries to prevent
 # database exceptions from crashing the Flask app.
 
-import mariadb
+import pymysql as mariadb
 import sys
 import secrets
 from datetime import datetime, timedelta
@@ -16,11 +16,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # Defines the server address, user credentials, database name, and custom port.
 # NOTE: Port is set to 3307 to target the default WAMP MariaDB server.
 DB_CONFIG = { 
-    "host":     "localhost", 
-    "user":     "root", 
-    "password": "healthyrice", 
-    "database": "rice_health", 
-    "port":     3307, 
+    "host":     "mysql-36584390-dugay684-9775.e.aivencloud.com",
+    "user":     "avnadmin",
+    "password": "AVNS_6KuybtPDl6mL-ahfFvI",
+    "port":     10633,
+    "database": "defaultdb",
+    "autocommit": True
 }
 
 _migrated = False
