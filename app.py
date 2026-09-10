@@ -338,12 +338,12 @@ def analyze_rice_health(img, weather_condition="hot"):
         dl_disease = None
 
     # PHASE 1: Image Validation (Out of distribution check)
-    # If the deep learning model is highly unconfident, check visual similarity to see if it's even a rice leaf.
-    if dl_confidence < 0.40:
+    # Only reject if BOTH deep learning confidence is extremely low AND visual similarity is below 0.15
+    if dl_confidence < 0.25:
         raw_visual_matches = image_comparator.get_matching_diseases(img, threshold=0.0, max_matches=1)
         top_visual_score = raw_visual_matches[0][1] if raw_visual_matches else 0.0
         
-        if top_visual_score < 0.35:
+        if top_visual_score < 0.15:
             return {
                 "is_valid": False,
                 "message": "This image does not appear to be a clear rice leaf. Please upload a clear, focused picture of a rice leaf for accurate analysis."

@@ -12,22 +12,6 @@ def analyze_color(img): # Main color engine | CHANGE: Add 'sensitivity' paramete
     """
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV) # Convert BGR to HSV for easier color math
     
-    # --- 0. GLOBAL BACKGROUND QUALITY CHECK ---
-    # Prevent white, brown, or black backgrounds from being misidentified as diseases.
-    height, width = img.shape[:2]
-    total_pixels = height * width
-    
-    bg_white_mask = cv2.inRange(hsv, np.array([0, 0, 180]), np.array([180, 50, 255]))
-    bg_brown_mask = cv2.inRange(hsv, np.array([0, 30, 20]), np.array([30, 255, 150]))
-    bg_black_mask = cv2.inRange(hsv, np.array([0, 0, 0]), np.array([180, 255, 40]))
-    
-    if (cv2.countNonZero(bg_white_mask) / total_pixels) > 0.60:
-        return 0, None, None, "Unknown", "white"
-    if (cv2.countNonZero(bg_brown_mask) / total_pixels) > 0.60:
-        return 0, None, None, "Unknown", "brown"
-    if (cv2.countNonZero(bg_black_mask) / total_pixels) > 0.60:
-        return 0, None, None, "Unknown", "black"
-    
     # --- 1. FIND HEALTHY COLORS ---
     # Defines what a "Healthy" leaf looks like in terms of Hue, Saturation, and Value.
     lower_green = np.array([35, 45, 40]) # Start of healthy green | CHANGE: [30, 40, 30] for darker forest green
@@ -72,6 +56,22 @@ def analyze_color(img): # Main color engine | CHANGE: Add 'sensitivity' paramete
     # --- 3. ISOLATE THE LEAF ---
     # This step removes the background by identifying everything that is either healthy OR damaged.
     potential_leaf = cv2.bitwise_or(healthy_colors, specific_damage) # Sum of all leaf-colored pixels
+    height, width = img.shape[:2]
+    total_pixels = height * width
+    leaf_candidate_pixels = cv2.countNonZero(potential_leaf)
+    
+    # If practically no leaf colors are present (< 2% of the image), check if it's a solid background wall/surface
+    if (leaf_candidate_pixels / total_pixels) < 0.02:
+        bg_white_mask = cv2.inRange(hsv, np.array([0, 0, 180]), np.array([180, 50, 255]))
+        bg_brown_mask = cv2.inRange(hsv, np.array([0, 30, 20]), np.array([30, 255, 150]))
+        bg_black_mask = cv2.inRange(hsv, np.array([0, 0, 0]), np.array([180, 255, 40]))
+        if (cv2.countNonZero(bg_white_mask) / total_pixels) > 0.75:
+            return 0, None, None, "Unknown", "white"
+        if (cv2.countNonZero(bg_brown_mask) / total_pixels) > 0.75:
+            return 0, None, None, "Unknown", "brown"
+        if (cv2.countNonZero(bg_black_mask) / total_pixels) > 0.75:
+            return 0, None, None, "Unknown", "black"
+
     kernel = np.ones((7,7), np.uint8) # Shaping tool for smoothing | CHANGE: (11,11) for more aggressive smoothing
     leaf_mask_rough = cv2.morphologyEx(potential_leaf, cv2.MORPH_CLOSE, kernel) # Fill small gaps inside the leaf
     leaf_mask_rough = cv2.morphologyEx(leaf_mask_rough, cv2.MORPH_OPEN, np.ones((5,5), np.uint8)) # Remove tiny background noise
@@ -84,7 +84,7 @@ def analyze_color(img): # Main color engine | CHANGE: Add 'sensitivity' paramete
         main_contour = contours[0]
         area = cv2.contourArea(main_contour)
         
-        # --- NEW: SOLIDITY CHECK FOR BARNYARD GRASS / COMPLEX WEEDS ---
+        # --- CONTOUR CHECK FOR IRREGULAR NON-LEAF OBJECTS ---
         if area > 500: # Ensure the largest object is actually a leaf and not noise
             hull = cv2.convexHull(main_contour)
             hull_area = cv2.contourArea(hull)
@@ -94,7 +94,8 @@ def analyze_color(img): # Main color engine | CHANGE: Add 'sensitivity' paramete
             hull_perimeter = cv2.arcLength(hull, True)
             perimeter_ratio = perimeter / hull_perimeter if hull_perimeter > 0 else 1.0
             
-            if solidity < 0.85 or perimeter_ratio > 1.5:
+            # Realistic weed check: only reject if extremely fragmented/spiky and porous
+            if solidity < 0.25 and perimeter_ratio > 4.5:
                 # Shape is too complex, stringy, scattered, or spiky (e.g. weed flowers or whole plant)
                 return 0, None, None, "Unknown", "complex"
                 
