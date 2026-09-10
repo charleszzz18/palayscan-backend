@@ -47,10 +47,16 @@ os.makedirs(uploads_dir, exist_ok=True) # Automatically create upload directory 
 image_comparator = ImageComparison(reference_dir="dataset")
 print(f"[App] Reference image counts: {image_comparator.get_stats()}")
 
-# Pre-load Deep Learning Model so the first user scan doesn't incur a cold-start timeout
+# Asynchronously pre-load Deep Learning Model in background thread so Gunicorn boots instantly
 from dl_analysis import load_dl_model
-load_dl_model()
-print("[App] Deep learning model pre-warmed successfully.")
+import threading
+
+def _async_warmup():
+    print("[App] Asynchronously pre-warming deep learning model in background...")
+    load_dl_model()
+    print("[App] Deep learning model pre-warmed successfully.")
+
+threading.Thread(target=_async_warmup, daemon=True).start()
 
 # Initialize the Flask Application
 app = Flask(__name__)
