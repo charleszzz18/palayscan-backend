@@ -1,0 +1,166 @@
+<!DOCTYPE html> <!-- Standard HTML5 declaration -->
+<html lang="en"> <!-- Root element defining the language -->
+
+<head>
+    <meta charset="UTF-8"> <!-- Set character encoding for international text support -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Ensure proper scaling on mobile devices -->
+    <title>PALAYSCAN | Rice Disease Detection System</title>
+    
+    <!-- External Assets and Styling -->
+    <link rel="stylesheet" href="style.css"> <!-- Link to the custom Glassmorphism CSS design system -->
+    <link rel="preconnect" href="https://fonts.googleapis.com"> <!-- Pre-connect to Google Fonts for faster loading -->
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet"> <!-- Import Poppins font family -->
+    
+    <!-- Core External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Library for health visualization charts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script> <!-- Library for generating PDF reports -->
+    
+    <!-- PWA (Progressive Web App) Configuration -->
+    <link rel="manifest" href="manifest.json"> <!-- Configuration for mobile installation -->
+    <meta name="theme-color" content="#4caf50"> <!-- Mobile browser header color -->
+</head>
+
+<body>
+    <!-- Main Application Header -->
+    <header>
+        <div class="header-container">
+            <div class="logo">
+                <span class="logo-icon">🌾</span> <!-- Branding icon -->
+                <h1>PALAYSCAN</h1>
+            </div>
+            <div id="headerActions" class="header-actions">
+                <!-- Filled dynamically via app.js -->
+            </div>
+        </div>
+    </header>
+
+    <!-- Core Content Container -->
+    <main>
+        <div class="upload-container">
+            <!-- SECTION 1: The Interactive Upload Zone (Displayed by default) -->
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📷</div> <!-- Action prompt icon -->
+                <h2>Analyze Your White Rice</h2>
+                <p>Select a clear image of your rice leaves to start the diagnostic.</p>
+                <input type="file" id="imageUpload" accept="image/*" style="display: none;"> <!-- Hidden file input for custom styling -->
+                <label for="imageUpload" class="upload-btn">Choose Image</label> <!-- Styled button triggering the input -->
+            </div>
+
+            <!-- SECTION 2: Image Preview & Weather Analysis (Displayed after file selection) -->
+            <div id="uploadPreview" class="upload-preview" style="display: none;">
+                <h3>Selected Image</h3>
+                <img id="previewImage" src="#" alt="Preview"> <!-- <img> tag where the user photo is displayed -->
+                
+                <!-- Automated Weather-Context Alert Box -->
+                <div id="weatherWarningBox" style="display: none; background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin-top: 20px; font-size: 0.9rem; border: 1px solid #ffeeba;"></div>
+
+                <!-- Post-upload Action Buttons -->
+                <div class="preview-actions">
+                    <button type="button" id="changeImageBtn" class="secondary-btn">Choose Different Image</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 3: AI Diagnostic Results (Injected dynamically via app.js) -->
+        <div id="results" class="results-container" style="display: none;"></div>
+    </main>
+
+    <!-- Formal PDF Report Template (Hidden by default, used by html2pdf) -->
+    <div id="pdfReportTemplate" style="display: none;">
+        <div class="report-header">
+            <div class="report-logo">🌾</div>
+            <div class="report-title-group">
+                <h2>OFFICIAL WHITE RICE CROP</h2>
+                <h2>HEALTH ANALYSIS REPORT</h2>
+            </div>
+        </div>
+
+        <div class="report-scan-details">
+            <div class="rsd-header">SCAN DETAILS</div>
+            <div class="rsd-body">
+                <div class="rsd-col">
+                    <p><strong>Scan ID:</strong> <span id="repScanId"></span></p>
+                    <p><strong>User ID:</strong> <span id="repUserId"></span></p>
+                </div>
+                <div class="rsd-col">
+                    <p><strong>Date of Analysis:</strong> <span id="repDate"></span></p>
+                    <p><strong>Scan Location:</strong> <span id="repLocation"></span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="report-main-grid">
+            <div class="report-left-col">
+                <h3 class="rm-section-title">RICE HEALTH SCORE</h3>
+                <div class="rep-score-circle" id="repScoreCircle">
+                    <span class="rep-score-value" id="repScoreValue"></span>
+                    <span class="rep-score-label">RICE HEALTH SCORE</span>
+                </div>
+                <div class="rep-overall-assessment">
+                    <strong>Overall Field Assessment:</strong> <span id="repAssessment"></span>
+                </div>
+            </div>
+            
+            <div class="report-right-col">
+                <h3 class="rm-section-title green-title">DISEASE ANALYSIS</h3>
+                <div class="rep-primary-detect">
+                    <p><strong>Primary Detection:</strong></p>
+                    <h4 id="repDiseaseName"></h4>
+                </div>
+                <div class="rep-confidence-box">
+                    <p>Match Confidence: [<span id="repConfidenceVal"></span>]</p>
+                    <div class="rep-conf-bar"><div class="rep-conf-fill" id="repConfFill"></div></div>
+                    <p class="rep-conf-text" id="repConfText"></p>
+                </div>
+                <div class="rep-system-profile">
+                    <strong>System Disease Profile:</strong>
+                    <p id="repProfileText"></p>
+                </div>
+
+                <h3 class="rm-section-title">DIAGNOSTIC VISUALIZATION</h3>
+                <div class="rep-visualization-box">
+                    <p class="rep-vis-id">Visualization ID: [<span id="repVisId"></span>]</p>
+                    <img id="repHighlightImg" src="" alt="Diagnostic Highlight">
+                    <p class="rep-vis-caption">Infected areas are highlighted in red for your review.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="report-footer-section">
+            <h3 class="rm-section-title">SYSTEM RECOMMENDATIONS & NEXT STEPS</h3>
+            <div class="rep-recommendation-box" id="repRec1"></div>
+            <div class="rep-recommendation-box" id="repRec2"></div>
+            <div class="rep-recommendation-box" id="repRec3">Consult local agricultural expert if condition persists.</div>
+        </div>
+
+        <div class="report-bottom-footer">
+            <div class="rbf-info">
+                <p><strong>System Report ID:</strong> [<span id="repSystemId"></span>]</p>
+                <p><strong>Report Generated by:</strong> PALAYSCAN v1.2</p>
+            </div>
+            <div class="rbf-center">
+                OFFICIAL System-Generated Document - ConFidentiAL
+            </div>
+            <div class="rbf-stamp">
+                <div class="stamp-circle">🌾<br>VERIFIED</div>
+            </div>
+        </div>
+    </div>
+    <!-- Core Logic Scripts -->
+    <script src="api_config.js"></script>
+    <script src="app.js"></script> <!-- Main frontend engine orchestrating analysis and UI updates -->
+    
+    <!-- Service Worker Registration for PWA Features (Offline Mode) -->
+    <script>
+        if ('serviceWorker' in navigator) { // Check if browser supports service workers
+            window.addEventListener('load', () => { // Register after the page is fully loaded
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => console.log('SW registered successfully'))
+                    .catch(error => console.log('SW registration failed:', error));
+            });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PALAYSCAN | Login</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="auth-body">
+    <div class="auth-wrapper">
+        <div class="auth-card">
+            <div class="auth-brand">
+                <span class="auth-logo-icon">🌾</span>
+                <h1 class="auth-title">PALAYSCAN</h1>
+                <p class="auth-subtitle">Rice Disease Detection System</p>
+            </div>
+
+            <h2 class="auth-form-title">Welcome Back</h2>
+            <p class="auth-form-sub">Sign in to continue</p>
+
+            <div id="authError" class="auth-alert auth-alert-error" style="display:none;"></div>
+            <div id="authSuccess" class="auth-alert auth-alert-success" style="display:none;"></div>
+
+            <form id="loginForm" autocomplete="off">
+                <div class="auth-field">
+                    <label for="email">Email Address</label>
+                    <div class="auth-input-wrap">
+                        <span class="auth-input-icon">📧</span>
+                        <input type="email" id="email" name="email" placeholder="Enter email address" required autocomplete="off">
+                    </div>
+                </div>
+                <div class="auth-field">
+                    <label for="password">Password</label>
+                    <div class="auth-input-wrap">
+                        <span class="auth-input-icon">🔒</span>
+                        <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="new-password">
+                    </div>
+                </div>
+                <button type="submit" class="auth-submit-btn" id="loginBtn">
+                    <span id="loginBtnText">Sign In</span>
+                    <span id="loginSpinner" style="display:none;">⏳ Signing in...</span>
+                </button>
+            </form>
+
+            <div class="auth-divider"><span>Don't have an account?</span></div>
+            <a href="register.html" class="auth-secondary-btn">Create Account</a>
+        </div>
+    </div>
+    <script src="api_config.js"></script>
+    <script src="login.js"></script>
+</body>
+</html>

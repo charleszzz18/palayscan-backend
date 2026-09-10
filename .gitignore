@@ -1,0 +1,8 @@
+# Palayscan .gitignore
+backend/dataset/
+backend/uploads/
+backend/__pycache__/
+frontend/__pycache__/
+__pycache__/
+*.pyc
+*.bak

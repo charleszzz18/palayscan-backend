@@ -1,0 +1,56 @@
+<!DOCTYPE html> <!-- Standard HTML5 declaration -->
+<html lang="en"> <!-- Language attribute | CHANGE: 'tl' for Tagalog -->
+<head>
+    <meta charset="UTF-8"> <!-- Character set -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Mobile responsiveness -->
+    <title>PALAYSCAN | Rice Disease Information</title>
+    <link rel="stylesheet" href="style.css"> <!-- Main CSS | CHANGE: Link to a specific theme file e.g. 'dark-theme.css' -->
+    <link rel="preconnect" href="https://fonts.googleapis.com"> <!-- Font prep -->
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin> <!-- Font prep -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet"> <!-- Font import | CHANGE: Use 'Outfit' for modern look -->
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <span class="logo-icon">🌾</span> <!-- Icon | CHANGE: Use 'Leaf' icon instead -->
+            <h1>PALAYSCAN</h1>
+        </div>
+    </header>
+    
+    <main>
+        <div class="disease-info-container">
+            <div class="disease-header">
+                <h2 id="diseaseName">Rice Disease Information</h2>
+                <button class="back-btn" onclick="window.location.href='index.html'">← Back to Analyzer</button>
+            </div>
+            
+            <div id="diseaseContent">
+                <div style="text-align: center; padding: 60px;">
+                    <div class="loading-spinner"></div>
+                    <p>Loading disease information...</p>
+                </div>
+            </div>
+    
+            <div id="confirmSection" class="disease-details-confirm" style="display: none;">
+                <h3>Is this what you see in your field?</h3>
+                <p style="margin-bottom: 20px;">If this disease matches your observations, click the button below for treatment steps.</p>
+                <button id="selectDiseaseBtn" class="upload-btn" style="margin-bottom: 40px;">Yes, This Matches My Condition</button>
+                
+                <!-- Hakbang sa Paggamot appears here upon click -->
+                <div id="recommendedActions" style="display: none; text-align: left; margin-bottom: 40px;">
+                    <div id="actionsList"></div>
+                </div>
+            </div>
+            
+            <!-- Side-by-side images -->
+            <div class="comparison-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: stretch;">
+                <div id="beforeImageContainer" style="text-align: center;"></div>
+                <div id="harvestProjection" style="text-align: center;"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="api_config.js"></script>
+    <script src="disease-info.js"></script> <!-- Page logic | CHANGE: Move to head with 'defer' if page is too large -->
+</body>
+</html> 

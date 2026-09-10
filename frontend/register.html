@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PALAYSCAN | Create Account</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="auth-body">
+    <div class="auth-wrapper">
+        <div class="auth-card auth-card-wide">
+            <div class="auth-brand">
+                <span class="auth-logo-icon">🌾</span>
+                <h1 class="auth-title">PALAYSCAN</h1>
+                <p class="auth-subtitle">Rice Disease Detection System</p>
+            </div>
+
+            <h2 class="auth-form-title">Create Account</h2>
+            <p class="auth-form-sub">Register to access the system</p>
+
+            <div id="authError" class="auth-alert auth-alert-error" style="display:none;"></div>
+            <div id="authSuccess" class="auth-alert auth-alert-success" style="display:none;"></div>
+
+            <form id="registerForm" autocomplete="on">
+                <!-- Personal Information Section -->
+                <h4 style="margin-top: 5px; margin-bottom: 10px; color: #1e293b; font-size: 0.95rem; font-weight: 600; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">Personal Information</h4>
+                
+                <div class="auth-field-row">
+                    <div class="auth-field">
+                        <label for="first_name">First Name <span class="req">*</span></label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">👤</span>
+                            <input type="text" id="first_name" placeholder="First Name" required>
+                        </div>
+                    </div>
+                    <div class="auth-field" style="flex: 0.5;">
+                        <label for="middle_initial">M.I.</label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">👤</span>
+                            <input type="text" id="middle_initial" placeholder="M.I." maxlength="2">
+                        </div>
+                    </div>
+                    <div class="auth-field">
+                        <label for="last_name">Last Name <span class="req">*</span></label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">👤</span>
+                            <input type="text" id="last_name" placeholder="Last Name" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="auth-field-row">
+                    <div class="auth-field">
+                        <label for="sex">Sex <span class="req">*</span></label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">🚻</span>
+                            <select id="sex" required>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="auth-field">
+                        <label for="age">Age <span class="req">*</span></label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">🎂</span>
+                            <input type="number" id="age" placeholder="Enter age" min="1" max="120" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="auth-field">
+                    <label for="contact_number">Contact Number</label>
+                    <div class="auth-input-wrap">
+                        <span class="auth-input-icon">📱</span>
+                        <input type="text" id="contact_number" placeholder="Enter contact number">
+                    </div>
+                </div>
+
+                <!-- Address Information Section -->
+                <h4 style="margin-top: 20px; margin-bottom: 10px; color: #1e293b; font-size: 0.95rem; font-weight: 600; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">Address Details</h4>
+                
+                <div class="auth-field-row">
+                    <div class="auth-field">
+                        <label for="province">Province</label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">📍</span>
+                            <select id="province" disabled>
+                                <option value="La Union" selected>La Union</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="auth-field">
+                        <label for="municipality">Municipality</label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">📍</span>
+                            <select id="municipality" disabled>
+                                <option value="Bacnotan" selected>Bacnotan</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="auth-field">
+                    <label for="barangay">Barangay <span class="req">*</span></label>
+                    <div class="auth-input-wrap">
+                        <span class="auth-input-icon">📍</span>
+                        <select id="barangay" required>
+                            <option value="">Select Barangay...</option>
+                            <option value="Agtipal">Agtipal</option>
+                            <option value="Arosip">Arosip</option>
+                            <option value="Bacqui">Bacqui</option>
+                            <option value="Bacsil">Bacsil</option>
+                            <option value="Bagutot">Bagutot</option>
+                            <option value="Ballogo">Ballogo</option>
+                            <option value="Baroro">Baroro</option>
+                            <option value="Bitalag">Bitalag</option>
+                            <option value="Bulala">Bulala</option>
+                            <option value="Burayoc">Burayoc</option>
+                            <option value="Bussaoit">Bussaoit</option>
+                            <option value="Cabaroan">Cabaroan</option>
+                            <option value="Cabarsican">Cabarsican</option>
+                            <option value="Cabugao">Cabugao</option>
+                            <option value="Calautit">Calautit</option>
+                            <option value="Carcarmay">Carcarmay</option>
+                            <option value="Casiaman">Casiaman</option>
+                            <option value="Galongen">Galongen</option>
+                            <option value="Guinabang">Guinabang</option>
+                            <option value="Legleg">Legleg</option>
+                            <option value="Lisqueb">Lisqueb</option>
+                            <option value="Mabanengbeng 1st">Mabanengbeng 1st</option>
+                            <option value="Mabanengbeng 2nd">Mabanengbeng 2nd</option>
+                            <option value="Maragayap">Maragayap</option>
+                            <option value="Nagatiran">Nagatiran</option>
+                            <option value="Nagsaraboan">Nagsaraboan</option>
+                            <option value="Nagsimbaanan">Nagsimbaanan</option>
+                            <option value="Nangalisan">Nangalisan</option>
+                            <option value="Narra">Narra</option>
+                            <option value="Ortega">Ortega</option>
+                            <option value="Oya-oy">Oya-oy</option>
+                            <option value="Paagan">Paagan</option>
+                            <option value="Pandan">Pandan</option>
+                            <option value="Pang-pang">Pang-pang</option>
+                            <option value="Poblacion">Poblacion</option>
+                            <option value="Quirino">Quirino</option>
+                            <option value="Raois">Raois</option>
+                            <option value="Salincob">Salincob</option>
+                            <option value="San Martin">San Martin</option>
+                            <option value="Santa Cruz">Santa Cruz</option>
+                            <option value="Santa Rita">Santa Rita</option>
+                            <option value="Sapilang">Sapilang</option>
+                            <option value="Sayoan">Sayoan</option>
+                            <option value="Sipulo">Sipulo</option>
+                            <option value="Tammocalao">Tammocalao</option>
+                            <option value="Ubbog">Ubbog</option>
+                            <option value="Zaragosa">Zaragosa</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Account Information Section -->
+                <h4 style="margin-top: 20px; margin-bottom: 10px; color: #1e293b; font-size: 0.95rem; font-weight: 600; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">Account Credentials</h4>
+                
+                <div class="auth-field-row">
+                    <div class="auth-field">
+                        <label for="role">Role <span class="req">*</span></label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">🏷️</span>
+                            <select id="role" required>
+                                <option value="">Select role...</option>
+                                <option value="farmer">Farmer</option>
+                                <option value="staff">MAO Staff</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="auth-field">
+                        <label for="email">Email Address <span class="req">*</span></label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">📧</span>
+                            <input type="email" id="email" placeholder="Enter email address" required autocomplete="email">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="auth-field-row">
+                    <div class="auth-field">
+                        <label for="password">Password <span class="req">*</span></label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">🔒</span>
+                            <input type="password" id="password" placeholder="Min. 6 characters" required autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div class="auth-field">
+                        <label for="confirm_password">Confirm Password <span class="req">*</span></label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon">🔒</span>
+                            <input type="password" id="confirm_password" placeholder="Re-enter password" required autocomplete="new-password">
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="auth-submit-btn" id="registerBtn" style="margin-top: 15px;">
+                    <span id="registerBtnText">Create Account</span>
+                    <span id="registerSpinner" style="display:none;">⏳ Creating account...</span>
+                </button>
+            </form>
+
+            <div class="auth-divider"><span>Already have an account?</span></div>
+            <a href="login.html" class="auth-secondary-btn">Sign In</a>
+        </div>
+
+    </div>
+    <script src="api_config.js"></script>
+    <script src="register.js"></script>
+</body>
+</html>

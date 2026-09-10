@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PALAYSCAN | Admin Panel</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="admin-body">
+
+<div class="admin-layout">
+    <!-- Sidebar -->
+    <aside class="admin-sidebar">
+        <div class="admin-brand">
+            <span>🌾</span>
+            <div>
+                <h2>PALAYSCAN</h2>
+                <p>Admin Panel</p>
+            </div>
+        </div>
+        <nav class="admin-nav">
+            <a href="#" class="admin-nav-link active" data-tab="dashboard" onclick="switchTab('dashboard',this)">📊 Dashboard</a>
+            <a href="#" class="admin-nav-link" data-tab="scans" onclick="switchTab('scans',this)">🔬 Scan Records</a>
+            <a href="#" class="admin-nav-link" data-tab="users" onclick="switchTab('users',this)">👥 Manage Users</a>
+            <a href="#" class="admin-nav-link" data-tab="diseases" onclick="switchTab('diseases',this)">🌿 Disease Database</a>
+            <a href="#" class="admin-nav-link" data-tab="reports" onclick="switchTab('reports',this)">📄 Generate Reports</a>
+            <a href="index.html" class="admin-nav-link desktop-run-scan" style="border: 1.5px dashed rgba(34,197,94,0.4); margin-top: 10px; color: #4ade80; font-weight: 600;">🔍 Run Leaf Scan</a>
+        </nav>
+        <div class="admin-sidebar-footer">
+            <p id="adminName">Loading...</p>
+            <a href="index.html" class="admin-logout-btn mobile-run-scan" style="background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); text-decoration: none; text-align: center; margin-bottom: 8px;">🔍 Run Leaf Scan</a>
+            <button onclick="adminLogout()" class="admin-logout-btn">🚪 Logout</button>
+        </div>
+    </aside>
+
+    <!-- Mobile Header -->
+    <header class="mobile-admin-header">
+        <div class="mah-row mah-row-1">
+            <div class="mah-logo">🌾</div>
+            <div class="mah-user-dropdown-container" style="position: relative;">
+                <div class="mah-user-pill" onclick="this.nextElementSibling.classList.toggle('show')" style="cursor: pointer;">
+                    <img src="https://ui-avatars.com/api/?name=System+Admin&background=random" alt="Admin Avatar" class="mah-avatar">
+                    <div class="mah-user-info">
+                        <span class="mah-user-name">System</span>
+                        <span class="mah-user-role">Administrator</span>
+                    </div>
+                </div>
+                <div class="mah-dropdown-menu">
+                    <button class="mah-dropdown-item mah-logout" onclick="adminLogout()">
+                        <i class="emoji" style="font-style: normal; font-size: 0.9em;">⏻</i> Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="mah-row mah-row-2" style="justify-content: center;">
+            <span class="mah-brand">PALAYSCAN</span>
+        </div>
+        <div class="mah-row mah-row-3">
+            <div class="mah-welcome">
+                <p>Welcome,</p>
+                <p>Administrator!</p>
+            </div>
+            <button class="mah-run-scan" onclick="window.location.href='index.html'">
+                <i class="emoji" style="font-style: normal;">🔬</i> Run Leaf Scan
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="admin-main">
+        <!-- DASHBOARD TAB -->
+        <div id="tab-dashboard" class="admin-tab active">
+            <h1 class="admin-page-title">Dashboard</h1>
+            <div class="admin-stats-grid">
+                <div class="admin-stat-card">
+                    <div class="admin-stat-icon">👥</div>
+                    <div class="admin-stat-info">
+                        <span id="statUsers">—</span>
+                        <p>Registered Users</p>
+                    </div>
+                    <div class="admin-stat-trend" id="trendUsers">+0 New Today</div>
+                </div>
+                <div class="admin-stat-card">
+                    <div class="admin-stat-icon">🔬</div>
+                    <div class="admin-stat-info">
+                        <span id="statScans">—</span>
+                        <p>Total Scans</p>
+                    </div>
+                    <div class="admin-stat-trend" id="trendScans" style="color: #166534;">+0 New Today</div>
+                </div>
+                <div class="admin-stat-card healthy">
+                    <div class="admin-stat-icon">🛡️</div>
+                    <div class="admin-stat-info">
+                        <span id="statHealthy">—</span>
+                        <p>Healthy Results</p>
+                    </div>
+                </div>
+                <div class="admin-stat-card diseased">
+                    <div class="admin-stat-icon">⚠️</div>
+                    <div class="admin-stat-info">
+                        <span id="statDiseased">—</span>
+                        <p>Unhealthy Results</p>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-chart-card">
+                <h3>🌾 Summary of Scan Results (Top Detected)</h3>
+                <canvas id="diseaseChart" height="100"></canvas>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 20px;">
+                <div class="admin-chart-card">
+                    <h3>👥 Gender Distribution</h3>
+                    <canvas id="genderChart" height="180"></canvas>
+                </div>
+                <div class="admin-chart-card">
+                    <h3>🎂 Age Demographics (Avg: <span id="avgAgeText">0</span> yrs)</h3>
+                    <canvas id="ageChart" height="180"></canvas>
+                </div>
+            </div>
+            <div class="admin-chart-card" style="margin-top: 20px;">
+                <h3>📍 Number of Users per Barangay</h3>
+                <canvas id="barangayChart" height="100"></canvas>
+            </div>
+        </div>
+
+        <!-- SCAN RECORDS TAB -->
+        <div id="tab-scans" class="admin-tab" style="display:none;">
+            <h1 class="admin-page-title">Scan Records</h1>
+            <div class="admin-filter-container">
+                <input type="text" id="scanSearch" class="admin-search-input" placeholder="🔍 Search by name, disease, or date..." onkeyup="filterScans()">
+                <select id="scanStatusFilter" class="admin-filter-select" onchange="filterScans()" style="flex:0.3;min-width:150px;">
+                    <option value="">All Statuses</option>
+                    <option value="healthy">✅ Healthy</option>
+                    <option value="unhealthy">⚠️ Unhealthy</option>
+                </select>
+                <select id="scanDiseaseFilter" class="admin-filter-select" onchange="filterScans()" style="flex:0.3;min-width:150px;">
+                    <option value="">All Diseases</option>
+                    <option value="blight">Blight</option>
+                    <option value="blast">Blast</option>
+                    <option value="brown spot">Brown Spot</option>
+                    <option value="rust">Rust</option>
+                    <option value="leaf strip">Leaf Strip</option>
+                </select>
+            </div>
+            <div class="admin-table-wrap">
+                <table class="admin-table" id="scansTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Date</th>
+                            <th>User</th>
+                            <th>Barangay</th>
+                            <th>Disease Detected</th>
+                            <th>Health Score</th>
+                            <th>Status</th>
+                            <th>Weather</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scansBody">
+                        <tr><td colspan="8" style="text-align:center;padding:30px;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="scansPagination" class="admin-pagination"></div>
+        </div>
+
+        <!-- USERS TAB -->
+        <div id="tab-users" class="admin-tab" style="display:none;">
+            <h1 class="admin-page-title">Manage Users</h1>
+            <div class="admin-filter-container">
+                <input type="text" id="userSearch" class="admin-search-input" placeholder="🔍 Search by name, email, or barangay..." onkeyup="filterUsers()">
+                <select id="userRoleFilter" class="admin-filter-select" onchange="filterUsers()" style="flex:0.3;min-width:170px;">
+                    <option value="">All Roles</option>
+                    <option value="pending">⏳ Pending MAO Staff</option>
+                    <option value="staff">🌿 MAO Staff (Approved)</option>
+                    <option value="farmer">🌾 Farmers</option>
+                    <option value="admin">👑 Admins</option>
+                </select>
+            </div>
+            <div id="pendingStaffBanner" style="display:none;margin-bottom:16px;background:#fffbeb;border:1.5px solid #fcd34d;padding:12px 18px;border-radius:10px;color:#92400e;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <div>
+                    <strong>🔔 Action Required:</strong>
+                    <span id="pendingStaffCountText">0</span> MAO Staff registration(s) awaiting admission.
+                </div>
+                <button onclick="document.getElementById('userRoleFilter').value='pending';filterUsers();" style="background:#b45309;color:white;border:none;padding:6px 14px;border-radius:6px;font-size:0.8rem;cursor:pointer;font-weight:600;">Review Pending</button>
+            </div>
+            <div class="admin-table-wrap">
+                <table class="admin-table" id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Address</th>
+                            <th>Sex</th>
+                            <th>Age</th>
+                            <th>Barangay</th>
+                            <th>Contact</th>
+                            <th>Registered</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersBody">
+                        <tr><td colspan="11" style="text-align:center;padding:30px;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="usersPagination" class="admin-pagination"></div>
+        </div>
+
+        <!-- DISEASE DATABASE TAB -->
+        <div id="tab-diseases" class="admin-tab" style="display:none;">
+            <h1 class="admin-page-title">🌿 Disease Database</h1>
+
+            <div class="admin-chart-card" style="margin-bottom:24px;">
+                <h3>Add New Treatment Advice</h3>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;">
+                    <select id="newDiseaseSelect" style="flex:1;min-width:160px;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-family:Poppins,sans-serif;font-size:0.9rem;">
+                        <option value="">Select disease...</option>
+                        <option>Blight</option><option>Blast</option><option>Brown Spot</option>
+                        <option>Rust</option><option>Leaf Strip</option><option>Healthy</option>
+                    </select>
+                    <input type="text" id="newAdviceText" placeholder="Enter treatment advice step..." style="flex:3;min-width:240px;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-family:Poppins,sans-serif;font-size:0.9rem;">
+                    <button onclick="addAdvice()" style="padding:10px 24px;background:linear-gradient(135deg,#22c55e,#166534);color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;font-family:Poppins,sans-serif;">+ Add</button>
+                </div>
+                <div id="diseaseFormMsg" style="margin-top:10px;font-size:0.85rem;"></div>
+            </div>
+
+            <input type="text" id="diseaseSearch" class="admin-search-input" placeholder="🔍 Search disease or treatment advice..." onkeyup="filterDiseases()">
+
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr><th>#</th><th>Disease</th><th>Treatment Advice</th><th>Action</th></tr>
+                    </thead>
+                    <tbody id="diseasesBody">
+                        <tr><td colspan="4" style="text-align:center;padding:30px;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="diseasesPagination" class="admin-pagination"></div>
+        </div>
+
+        <!-- GENERATE REPORTS TAB -->
+        <div id="tab-reports" class="admin-tab" style="display:none;">
+            <h1 class="admin-page-title">📄 Generate Reports</h1>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;">
+
+                <div class="admin-chart-card">
+                    <div style="font-size:3rem;margin-bottom:16px;">📊</div>
+                    <h3 style="margin-bottom:8px;">Scan Records Report</h3>
+                    <p style="font-size:0.85rem;color:#64748b;margin-bottom:20px;">Export all scan records including user, disease, health score, and advice as a CSV file.</p>
+                    <button onclick="downloadCSV()" style="width:100%;padding:12px;background:linear-gradient(135deg,#22c55e,#166534);color:white;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Poppins,sans-serif;font-size:0.95rem;">⬇ Download CSV Report</button>
+                </div>
+
+                <div class="admin-chart-card">
+                    <div style="font-size:3rem;margin-bottom:16px;">👥</div>
+                    <h3 style="margin-bottom:8px;">User Summary</h3>
+                    <p style="font-size:0.85rem;color:#64748b;margin-bottom:20px;">View all registered users, their roles, barangay, and registration date.</p>
+                    <button onclick="switchTab('users', document.querySelector('[data-tab=users]'))" style="width:100%;padding:12px;background:#1e293b;color:white;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Poppins,sans-serif;font-size:0.95rem;">👁 View Users Table</button>
+                </div>
+
+                <div class="admin-chart-card">
+                    <div style="font-size:3rem;margin-bottom:16px;">📈</div>
+                    <h3 style="margin-bottom:8px;">Dashboard Summary</h3>
+                    <p style="font-size:0.85rem;color:#64748b;margin-bottom:20px;">View aggregate stats: total scans, healthy vs unhealthy results, and top diseases chart.</p>
+                    <button onclick="switchTab('dashboard', document.querySelector('[data-tab=dashboard]'))" style="width:100%;padding:12px;background:#0f172a;color:white;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Poppins,sans-serif;font-size:0.95rem;">📊 View Dashboard</button>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+</div>
+<!-- CUSTOM ANIMATED MOBILE TAB BAR -->
+<div id="mobile-nav-container">
+	<div class="tab-nav-container">
+		<div class="tab active" data-target-tab="dashboard">
+			<i class="emoji">📊</i>
+			<p>Home</p>
+		</div>
+		<div class="tab" data-target-tab="scans">
+			<i class="emoji">🔬</i>
+			<p>Scans</p>
+		</div>
+		<div class="tab" data-target-tab="users">
+			<i class="emoji">👥</i>
+			<p>Users</p>
+		</div>
+		<div class="tab" data-target-tab="diseases">
+			<i class="emoji">🌿</i>
+			<p>Diseases</p>
+		</div>
+        <div class="tab" data-target-tab="reports">
+			<i class="emoji">📄</i>
+			<p>Reports</p>
+		</div>
+	</div>
+</div>
+
+<script src="api_config.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>
