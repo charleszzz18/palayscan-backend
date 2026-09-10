@@ -294,6 +294,35 @@ def get_tagalog_advice(disease_name):
     return ["Kumunsulta sa inyong lokal na agriculturist sa munisipyo para sa tamang gamot."]
 
 
+def detect_leaf_streaks(img):
+    """
+    Detects if an image contains interveinal narrow parallel streaks characteristic
+    of Bacterial Leaf Streak (Leaf Strip). Returns (streak_count, max_aspect_ratio).
+    """
+    h, w = img.shape[:2]
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    green_mask = cv2.inRange(hsv, (35, 30, 30), (85, 255, 255))
+    non_green = cv2.bitwise_not(green_mask)
+    cnts, _ = cv2.findContours(non_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    vertical_streaks = []
+    for c in cnts:
+        area = cv2.contourArea(c)
+        if area < 70:
+            continue
+        x, y, cw, ch = cv2.boundingRect(c)
+        # Narrow vertical interveinal stripe:
+        # 1. Height is at least 2.8x width (vertical orientation)
+        # 2. Width is narrow (<= 0.08 * image width, typically < 60px)
+        # 3. Height is at least 35 px
+        if ch >= 2.8 * cw and cw <= 0.08 * w and ch >= 35:
+            vertical_streaks.append((cw, ch, ch / max(1, cw), area))
+            
+    num_streaks = len(vertical_streaks)
+    max_ar = max([s[2] for s in vertical_streaks]) if vertical_streaks else 0.0
+    return num_streaks, max_ar
+
+
 # --- 7. CORE DIAGNOSTIC LOGIC ---
 
 def analyze_rice_health(img, weather_condition="hot"):
@@ -375,8 +404,38 @@ def analyze_rice_health(img, weather_condition="hot"):
     possible_diseases = []
     visual_matches_formatted = []
 
+    # Detect interveinal streak morphometry for Bacterial Leaf Streak (Leaf Strip)
+    num_streaks, max_streak_ar = detect_leaf_streaks(img)
+
+    # Check for Bacterial Leaf Streak (Leaf Strip)
+    # MobileNetV2 has < 100 clump photos for Leaf Strip and zero single-leaf macro training shots,
+    # causing it to misclassify close-up Leaf Strip as Blight, Blast, or Healthy.
+    is_leaf_strip = False
+    leaf_strip_sim = next((s for d, s in visual_matches if d == "Leaf Strip"), 0.0)
+    if top_visual_disease == "Leaf Strip" and top_visual_score >= 0.75:
+        if dl_disease == "Blast" and dl_confidence >= 0.90:
+            if num_streaks >= 10 or max_streak_ar >= 16.0:
+                is_leaf_strip = True
+        else:
+            is_leaf_strip = True
+    elif leaf_strip_sim >= 0.75 and dl_disease == "Blight":
+        is_leaf_strip = True
+    elif num_streaks >= 12 and max_streak_ar >= 10.0:
+        # Interveinal linear streaks between veins (neither Blight nor Brown Spot forms > 10 narrow streaks)
+        if not (dl_disease == top_visual_disease and dl_confidence >= 0.60):
+            is_leaf_strip = True
+
+    if is_leaf_strip:
+        confirmed_diseases.append("Leaf Strip")
+        possible_diseases.append("Leaf Strip")
+        conf_score = max(leaf_strip_sim if leaf_strip_sim >= 0.70 else 0.88, 0.85)
+        visual_matches_formatted.append({"name": "Leaf Strip", "similarity": f"{conf_score:.2f}"})
+        if dl_disease and dl_disease != "Leaf Strip" and dl_disease != "Healthy":
+            visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
+            if dl_confidence >= 0.40 and dl_disease not in possible_diseases:
+                possible_diseases.append(dl_disease)
     # 1. High Confidence Deep Learning: Decisive diagnosis without confusing fingerprint noise
-    if dl_disease and dl_confidence >= 0.65:
+    elif dl_disease and dl_confidence >= 0.65:
         confirmed_diseases.append(dl_disease)
         possible_diseases.append(dl_disease)
         visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
@@ -388,7 +447,7 @@ def analyze_rice_health(img, weather_condition="hot"):
                     possible_diseases.append(name)
     elif dl_disease and dl_confidence >= 0.40:
         # Moderate confidence: cross-reference with top fingerprint match
-        if dl_disease == top_visual_disease or dl_confidence >= 0.50:
+        if dl_disease == top_visual_disease:
             confirmed_diseases.append(dl_disease)
             possible_diseases.append(dl_disease)
         elif top_visual_disease and top_visual_score >= 0.60:
@@ -396,6 +455,9 @@ def analyze_rice_health(img, weather_condition="hot"):
             possible_diseases.append(top_visual_disease)
             if dl_disease not in possible_diseases:
                 possible_diseases.append(dl_disease)
+        elif dl_confidence >= 0.50:
+            confirmed_diseases.append(dl_disease)
+            possible_diseases.append(dl_disease)
         else:
             possible_diseases.append(dl_disease)
             if top_visual_disease and top_visual_disease not in possible_diseases:
