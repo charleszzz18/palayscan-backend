@@ -59,36 +59,50 @@ def load_dl_model(): # Function to load the deep learning model into memory
         print(f"[DL] Error loading model: {e}", file=sys.stderr) # Log error to stderr
         return False # Return False on failure
 
-def analyze_with_dl(img): # Primary function for Deep Learning analysis
+def analyze_with_dl(img, return_all_preds=False): # Primary function for Deep Learning analysis
     """
     Takes a cv2 image, runs it through the Deep Learning model.
-    Returns: (predicted_disease_name, confidence_score) or (None, 0)
+    Preserves natural aspect ratio to avoid squashing portrait smartphone photos.
+    Returns: (predicted_disease_name, confidence_score) or (predicted_disease, confidence, all_predictions)
     """
     if not load_dl_model(): # Ensure model is loaded before proceeding
-        return None, 0.0 # Return None if model fails to load
+        return (None, 0.0, {}) if return_all_preds else (None, 0.0)
         
     try: # Start inference error handling
-        # Preprocess the image for MobileNetV2 (224x224, RGB, normalized 0-1)
-        # OpenCV uses BGR, convert to RGB
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # Convert image color space to RGB
-        img_resized = cv2.resize(img_rgb, (224, 224)) # Resize image to 224x224 for the model
+        # 1. Preserve aspect ratio by center-cropping elongated phone images to square
+        h, w = img.shape[:2]
+        if abs(h - w) > min(h, w) * 0.15:
+            min_dim = min(h, w)
+            cy, cx = h // 2, w // 2
+            img_square = img[cy - min_dim//2 : cy + min_dim//2, cx - min_dim//2 : cx + min_dim//2]
+        else:
+            img_square = img
+
+        # 2. Convert to RGB and resize to 224x224
+        img_rgb = cv2.cvtColor(img_square, cv2.COLOR_BGR2RGB)
+        img_resized = cv2.resize(img_rgb, (224, 224), interpolation=cv2.INTER_AREA)
         
-        # Expand dims to create a batch of 1: shape (1, 224, 224, 3)
-        img_array = np.expand_dims(img_resized, axis=0) # Add batch dimension
-        img_array = img_array.astype('float32') / 255.0 # Rescale pixel values to [0, 1]
+        # 3. Expand dims to create batch: shape (1, 224, 224, 3)
+        img_array = np.expand_dims(img_resized, axis=0).astype('float32') / 255.0
         
-        # Predict using fast, low-memory direct call
-        predictions = _model(img_array, training=False).numpy()
-        predicted_class_idx = int(np.argmax(predictions[0])) # Get index of highest probability
-        confidence = float(predictions[0][predicted_class_idx]) # Extract the confidence score
+        # 4. Predict using fast direct model call
+        predictions = _model(img_array, training=False).numpy()[0]
+        predicted_class_idx = int(np.argmax(predictions))
+        confidence = float(predictions[predicted_class_idx])
         
-        raw_label = _class_labels[predicted_class_idx] # Get the raw class label string
+        raw_label = _class_labels[predicted_class_idx]
+        disease_name = raw_label.title()
         
-        # Format the label nicely (e.g., "Bacterial leaf blight" -> "Bacterial Leaf Blight")
-        disease_name = raw_label.title() # Convert string to title case
-        
-        return disease_name, confidence # Return the prediction and confidence
+        all_preds = {
+            _class_labels[i].title(): float(predictions[i])
+            for i in range(len(predictions))
+            if i in _class_labels
+        }
+
+        if return_all_preds:
+            return disease_name, confidence, all_preds
+        return disease_name, confidence
         
     except Exception as e: # Catch inference errors
         print(f"[DL] Inference error: {e}", file=sys.stderr) # Log error message
-        return None, 0.0 # Return failure state
+        return (None, 0.0, {}) if return_all_preds else (None, 0.0)

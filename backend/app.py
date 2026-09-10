@@ -332,21 +332,37 @@ def analyze_rice_health(img, weather_condition="hot"):
     # 7.2 Weather Sensitivity tuning
     # Cold temperatures reduce crop metabolism, lowering thresholds. Hot/Dry climates alter patterns.
     if weather_condition == "cold":
-        health_threshold       = 0.1
-        texture_diseases       = analyze_texture(img, sensitivity=1.2)
-        visual_match_threshold = 0.40
+        health_threshold = 0.1
+        texture_diseases, tex_metrics = analyze_texture(img, sensitivity=1.2, return_metrics=True)
     else:
-        health_threshold       = 0.7
-        texture_diseases       = analyze_texture(img)
-        visual_match_threshold = 0.45
+        health_threshold = 0.7
+        texture_diseases, tex_metrics = analyze_texture(img, sensitivity=1.0, return_metrics=True)
 
-    # 7.3 Deep Learning Identification
+    brown_ratio = tex_metrics['brown_ratio']
+    gray_ratio  = tex_metrics['gray_ratio']
+    straw_ratio = tex_metrics['straw_ratio']
+    white_ratio = tex_metrics['white_ratio']
+
+    # 7.3 Deep Learning Identification (MobileNetV2)
     from dl_analysis import analyze_with_dl
-    dl_disease, dl_confidence = analyze_with_dl(img)
+    dl_disease, dl_confidence, dl_all_preds = analyze_with_dl(img, return_all_preds=True)
 
     SUPPORTED_DISEASES = ["Blight", "Blast", "Brown Spot", "Rust", "Leaf Strip", "Healthy"]
     if dl_disease and dl_disease not in SUPPORTED_DISEASES:
         dl_disease = None
+
+    # Biological Plant Pathology Validation:
+    # 1. Blast vs Brown Spot: Blast (Magnaporthe) strictly requires an ash-gray sporulating center.
+    # If lesions are brown with near-zero gray center (gray < 0.005), they are Brown Spot / Cercospora spots.
+    if dl_disease == "Blast" and gray_ratio < 0.005 and brown_ratio > 0.005:
+        dl_disease = "Brown Spot"
+        dl_confidence = max(dl_confidence, 0.90)
+
+    # 2. Bacterial Blight validation: straw/white lesions along leaf edges
+    if (straw_ratio > 0.04 or white_ratio > 0.03) and dl_disease in ["Blast", "Brown Spot"]:
+        if "Blight" in texture_diseases or straw_ratio > brown_ratio * 1.2:
+            dl_disease = "Blight"
+            dl_confidence = max(dl_confidence, 0.85)
 
     # PHASE 1: Image Validation (Out of distribution check)
     # Only reject if BOTH deep learning confidence is extremely low AND visual similarity is below 0.15
@@ -361,37 +377,51 @@ def analyze_rice_health(img, weather_condition="hot"):
             }
 
     # Resolve visual matches and merge heuristics
-    visual_matches = image_comparator.get_matching_diseases(img, threshold=0.25, max_matches=5)
+    visual_matches = image_comparator.get_matching_diseases(img, threshold=0.30, max_matches=3)
     visual_matches = [(d, s) for d, s in visual_matches if d in SUPPORTED_DISEASES]
     top_visual_disease = visual_matches[0][0] if visual_matches else None
     top_visual_score = visual_matches[0][1] if visual_matches else 0.0
 
     confirmed_diseases = []
     possible_diseases = []
-
-    # 1. Deep Learning Model (MobileNetV2): trained on 50+ layers of visual feature representations
-    if dl_disease and dl_confidence >= 0.45:
-        possible_diseases.append(dl_disease)
-        # Confirm if DL is high confidence (>= 0.60) OR if it agrees with the top visual similarity match
-        if dl_confidence >= 0.60 or dl_disease == top_visual_disease:
-            confirmed_diseases.append(dl_disease)
-    elif top_visual_disease and top_visual_score >= 0.40:
-        # Fallback to visual dataset fingerprint matching if DL is uncertain
-        possible_diseases.append(top_visual_disease)
-        if top_visual_score >= 0.55:
-            confirmed_diseases.append(top_visual_disease)
-
-    # 2. Add top visual matches to possible diseases for differential diagnosis
-    for d, s in visual_matches[:3]:
-        if d not in possible_diseases and s >= 0.35:
-            possible_diseases.append(d)
-
-    # 3. Format visual matches for the UI report breakdown
     visual_matches_formatted = []
-    if dl_disease and dl_confidence >= 0.30:
+
+    # 1. High Confidence Deep Learning: Decisive diagnosis without confusing fingerprint noise
+    if dl_disease and dl_confidence >= 0.65:
+        confirmed_diseases.append(dl_disease)
+        possible_diseases.append(dl_disease)
         visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
-    for name, score in visual_matches:
-        if name != dl_disease and score >= 0.25:
+        # Add secondary candidate only if DL itself detected a substantial second probability (> 20%)
+        for name, conf in sorted(dl_all_preds.items(), key=lambda x: x[1], reverse=True):
+            if name != dl_disease and name in SUPPORTED_DISEASES and conf >= 0.20 and name != "Healthy":
+                visual_matches_formatted.append({"name": name, "similarity": f"{conf:.2f}"})
+                if name not in possible_diseases:
+                    possible_diseases.append(name)
+    elif dl_disease and dl_confidence >= 0.40:
+        # Moderate confidence: cross-reference with top fingerprint match
+        if dl_disease == top_visual_disease or dl_confidence >= 0.50:
+            confirmed_diseases.append(dl_disease)
+            possible_diseases.append(dl_disease)
+        elif top_visual_disease and top_visual_score >= 0.60:
+            confirmed_diseases.append(top_visual_disease)
+            possible_diseases.append(top_visual_disease)
+            if dl_disease not in possible_diseases:
+                possible_diseases.append(dl_disease)
+        else:
+            possible_diseases.append(dl_disease)
+            if top_visual_disease and top_visual_disease not in possible_diseases:
+                possible_diseases.append(top_visual_disease)
+                
+        visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
+        for name, score in visual_matches:
+            if name != dl_disease and score >= 0.50:
+                visual_matches_formatted.append({"name": name, "similarity": f"{score:.2f}"})
+    elif top_visual_disease and top_visual_score >= 0.45:
+        # Fallback to visual fingerprints if DL is uncertain
+        possible_diseases.append(top_visual_disease)
+        if top_visual_score >= 0.60:
+            confirmed_diseases.append(top_visual_disease)
+        for name, score in visual_matches:
             visual_matches_formatted.append({"name": name, "similarity": f"{score:.2f}"})
 
     # Filter according to weather context

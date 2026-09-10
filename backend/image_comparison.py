@@ -155,16 +155,17 @@ class ImageComparison: # Core AI comparison class | CHANGE: Rename if adding non
             ref_s = np.asarray(ref_features['s_hist'], dtype=np.float32).reshape(64, 1)
             ref_v = np.asarray(ref_features['v_hist'], dtype=np.float32).reshape(64, 1)
 
-            h_sim = cv2.compareHist(img_h, ref_h, cv2.HISTCMP_CORREL)
-            s_sim = cv2.compareHist(img_s, ref_s, cv2.HISTCMP_CORREL)
-            v_sim = cv2.compareHist(img_v, ref_v, cv2.HISTCMP_CORREL)
+            h_sim = max(cv2.compareHist(img_h, ref_h, cv2.HISTCMP_CORREL), 0.0)
+            s_sim = max(cv2.compareHist(img_s, ref_s, cv2.HISTCMP_CORREL), 0.0)
+            v_sim = max(cv2.compareHist(img_v, ref_v, cv2.HISTCMP_CORREL), 0.0)
 
             max_std = max(img_features['std_dev'], ref_features['std_dev'])
-            tex_sim = 1 - (abs(img_features['std_dev'] - ref_features['std_dev']) / max_std) if max_std > 0 else 1
+            tex_sim = max(1 - (abs(img_features['std_dev'] - ref_features['std_dev']) / max_std), 0.0) if max_std > 0 else 1.0
             max_edge = max(img_features['edge_density'], ref_features['edge_density'])
-            edge_sim = 1 - (abs(img_features['edge_density'] - ref_features['edge_density']) / max_edge) if max_edge > 0 else 1
+            edge_sim = max(1 - (abs(img_features['edge_density'] - ref_features['edge_density']) / max_edge), 0.0) if max_edge > 0 else 1.0
 
-            score = (h_sim * 0.20 + s_sim * 0.20 + v_sim * 0.10 + tex_sim * 0.25 + edge_sim * 0.25)
+            # Rice disease visual patterns are dominated by lesion hue and saturation
+            score = (h_sim * 0.45 + s_sim * 0.35 + v_sim * 0.10 + tex_sim * 0.05 + edge_sim * 0.05)
             all_scores.append(score)
 
         if not all_scores:
