@@ -7,6 +7,8 @@
 import cv2 # Computer Vision library | CHANGE: Update if using a different image processing library
 import numpy as np # Numerical math library | CHANGE: Standard dependency
 import os # System path library | CHANGE: Standard dependency
+import sys
+import pickle
 import glob # Filename pattern matching | CHANGE: Standard dependency
 import re # Regular expression library | CHANGE: Use for name cleaning
 from pathlib import Path # Path object management | CHANGE: Modern way to handle file paths
@@ -51,19 +53,6 @@ class ImageComparison: # Core AI comparison class | CHANGE: Rename if adding non
         Scans the reference directory and extracts fingerprints from all images,
         or loads them directly from a cache file if it exists.
         """
-        import pickle
-        # Fallback shim for environments with different NumPy versions
-        import sys
-        try:
-            import numpy._core
-        except ImportError:
-            try:
-                import numpy.core
-                sys.modules['numpy._core'] = numpy.core
-                sys.modules['numpy._core.multiarray'] = numpy.core.multiarray
-            except Exception:
-                pass
-
         # 1. Try to load from cache first
         if self.cache_file and os.path.exists(self.cache_file):
             print(f"[ImageComparison] Loading pre-computed fingerprints from {self.cache_file}...")
