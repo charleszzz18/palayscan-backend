@@ -153,10 +153,13 @@
     
     <!-- Service Worker Registration for PWA Features (Offline Mode) -->
     <script>
-        if ('serviceWorker' in navigator) { // Check if browser supports service workers
-            window.addEventListener('load', () => { // Register after the page is fully loaded
-                navigator.serviceWorker.register('sw.js')
-                    .then(registration => console.log('SW registered successfully'))
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js?v=3')
+                    .then(registration => {
+                        registration.update();
+                        console.log('SW registered successfully');
+                    })
                     .catch(error => console.log('SW registration failed:', error));
             });
         }
