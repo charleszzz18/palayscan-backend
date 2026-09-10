@@ -13,13 +13,14 @@ from pathlib import Path # Path object management | CHANGE: Modern way to handle
 from concurrent.futures import ThreadPoolExecutor # Parallel processing | CHANGE: Remove for low-power systems
 
 class ImageComparison: # Core AI comparison class | CHANGE: Rename if adding non-image comparison features
-    def __init__(self, reference_dir): # Constructor | CHANGE: Add 'cache_file' param to save fingerprints
+    def __init__(self, reference_dir, cache_file="fingerprints.pkl"):
         """
         Initializes the ImageComparison object and loads ALL reference images.
         """
         self.reference_dir = reference_dir # Store the root path of the reference dataset
+        self.cache_file = cache_file # Path to save/load pre-computed features
         self.reference_images = {} # Dictionary to store disease names and their corresponding image fingerprints
-        self.load_reference_images() # Trigger the initial data loading process | CHANGE: Move to an async task for faster startup
+        self.load_reference_images() # Trigger the initial data loading process
 
     # ------------------------------------------------------------------
     # DISEASE NAME NORMALIZATION MAP
@@ -45,10 +46,26 @@ class ImageComparison: # Core AI comparison class | CHANGE: Rename if adding non
             return self.NAME_MAP[lower] # Return the mapped official name
         return cleaned.title() # Default to title case if no mapping is found | CHANGE: Return 'Unknown' instead of raw name
 
-    def load_reference_images(self): # Bulk image loader | CHANGE: Add 'limit' parameter to test with few images
+    def load_reference_images(self):
         """
-        Scans the reference directory and extracts fingerprints from all images.
+        Scans the reference directory and extracts fingerprints from all images,
+        or loads them directly from a cache file if it exists.
         """
+        import pickle
+        # 1. Try to load from cache first
+        if self.cache_file and os.path.exists(self.cache_file):
+            print(f"[ImageComparison] Loading pre-computed fingerprints from {self.cache_file}...")
+            try:
+                with open(self.cache_file, 'rb') as f:
+                    self.reference_images = pickle.load(f)
+                count = sum(len(v) for v in self.reference_images.values())
+                print(f"[ImageComparison] Loaded {count} fingerprints from cache.")
+                return # Skip image processing!
+            except Exception as e:
+                print(f"[ImageComparison] Error loading cache: {e}. Falling back to image processing.")
+                self.reference_images = {}
+
+        # 2. If no cache, process images from dataset directory
         if not os.path.exists(self.reference_dir): # Check if the reference directory actually exists on disk
             print(f"[ImageComparison] WARNING: Reference directory not found: {self.reference_dir}") # Log warning
             return # Exit early if directory is missing
@@ -84,7 +101,19 @@ class ImageComparison: # Core AI comparison class | CHANGE: Rename if adding non
                         self.reference_images[disease_name] = [] # Set up storage list
                     self.reference_images[disease_name].append(self._extract_features(img)) # Extract features
                     total_loaded += 1 # Increment counter
+        
         print(f"[ImageComparison] Loaded {total_loaded} images.") # Print summary report to console
+        
+        # 3. Save newly extracted features to cache so we don't have to do this again
+        if self.cache_file and self.reference_images:
+            import pickle
+            print(f"[ImageComparison] Saving fingerprints to {self.cache_file}...")
+            try:
+                with open(self.cache_file, 'wb') as f:
+                    pickle.dump(self.reference_images, f)
+                print("[ImageComparison] Fingerprints saved successfully.")
+            except Exception as e:
+                print(f"[ImageComparison] Error saving cache: {e}")
 
     def _extract_features(self, img): # Create numerical fingerprint | CHANGE: Add ORB or SIFT keypoint detection
         """

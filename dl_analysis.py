@@ -20,20 +20,36 @@ def load_dl_model(): # Function to load the deep learning model into memory
         return False # Return False if model files are missing
         
     try: # Start error handling block
-        import tensorflow as tf # Import TensorFlow library
+        # Ensure we don't force legacy keras flag which breaks imports when tf_keras is absent
+        os.environ.pop("TF_USE_LEGACY_KERAS", None)
+
+        import tensorflow as tf
+        from tensorflow import keras
+
+        # Define patched layer subclasses to safely handle older serialized H5 model configs
+        class PatchedBatchNormalization(keras.layers.BatchNormalization):
+            def __init__(self, *args, **kwargs):
+                for k in ['renorm', 'renorm_clipping', 'renorm_momentum']:
+                    kwargs.pop(k, None)
+                super().__init__(*args, **kwargs)
+
+        class PatchedDense(keras.layers.Dense):
+            def __init__(self, *args, **kwargs):
+                kwargs.pop('quantization_config', None)
+                super().__init__(*args, **kwargs)
+
+        custom_objects = {
+            'BatchNormalization': PatchedBatchNormalization,
+            'Dense': PatchedDense
+        }
+
+        # Load with custom_objects and compile=False (inference only)
+        _model = keras.models.load_model(
+            MODEL_PATH,
+            custom_objects=custom_objects,
+            compile=False
+        )
         
-        # Patch for Keras 3 / TF 2.16+ to ignore legacy 'renorm' arguments in BatchNormalization
-        class PatchedBatchNormalization(tf.keras.layers.BatchNormalization):
-            def __init__(self, **kwargs):
-                kwargs.pop('renorm', None)
-                kwargs.pop('renorm_clipping', None)
-                kwargs.pop('renorm_momentum', None)
-                super().__init__(**kwargs)
-                
-        _model = tf.keras.models.load_model(
-            MODEL_PATH, 
-            custom_objects={'BatchNormalization': PatchedBatchNormalization}
-        ) # Load the H5 model file with the patch
         with open(CLASS_INDICES_PATH, 'r') as f: # Open the indices JSON file
             class_indices = json.load(f) # Parse the JSON content
             # Invert dictionary to get {index: "Class Name"}
