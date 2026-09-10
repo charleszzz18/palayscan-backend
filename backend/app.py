@@ -351,18 +351,7 @@ def analyze_rice_health(img, weather_condition="hot"):
     if dl_disease and dl_disease not in SUPPORTED_DISEASES:
         dl_disease = None
 
-    # Biological Plant Pathology Validation:
-    # 1. Blast vs Brown Spot: Blast (Magnaporthe) strictly requires an ash-gray sporulating center.
-    # If lesions are brown with near-zero gray center (gray < 0.005), they are Brown Spot / Cercospora spots.
-    if dl_disease == "Blast" and gray_ratio < 0.005 and brown_ratio > 0.005:
-        dl_disease = "Brown Spot"
-        dl_confidence = max(dl_confidence, 0.90)
-
-    # 2. Bacterial Blight validation: straw/white lesions along leaf edges
-    if (straw_ratio > 0.04 or white_ratio > 0.03) and dl_disease in ["Blast", "Brown Spot"]:
-        if "Blight" in texture_diseases or straw_ratio > brown_ratio * 1.2:
-            dl_disease = "Blight"
-            dl_confidence = max(dl_confidence, 0.85)
+    # Deep Learning Model (MobileNetV2) provides primary diagnosis across supported classes
 
     # PHASE 1: Image Validation (Out of distribution check)
     # Only reject if BOTH deep learning confidence is extremely low AND visual similarity is below 0.15
