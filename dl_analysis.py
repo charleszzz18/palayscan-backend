@@ -21,8 +21,19 @@ def load_dl_model(): # Function to load the deep learning model into memory
         
     try: # Start error handling block
         import tensorflow as tf # Import TensorFlow library
-        _model = tf.keras.models.load_model(MODEL_PATH) # Load the H5 model file
         
+        # Patch for Keras 3 / TF 2.16+ to ignore legacy 'renorm' arguments in BatchNormalization
+        class PatchedBatchNormalization(tf.keras.layers.BatchNormalization):
+            def __init__(self, **kwargs):
+                kwargs.pop('renorm', None)
+                kwargs.pop('renorm_clipping', None)
+                kwargs.pop('renorm_momentum', None)
+                super().__init__(**kwargs)
+                
+        _model = tf.keras.models.load_model(
+            MODEL_PATH, 
+            custom_objects={'BatchNormalization': PatchedBatchNormalization}
+        ) # Load the H5 model file with the patch
         with open(CLASS_INDICES_PATH, 'r') as f: # Open the indices JSON file
             class_indices = json.load(f) # Parse the JSON content
             # Invert dictionary to get {index: "Class Name"}
