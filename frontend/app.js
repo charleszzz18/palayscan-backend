@@ -260,9 +260,19 @@ async function analyzeImage(e) {
             return;
         }
 
-        // Cache findings locally and build report
-        sessionStorage.setItem('analysisData', JSON.stringify(data));
-        sessionStorage.setItem('previewImageSrc', document.getElementById("previewImage").src);
+        // Cache findings locally safely so Safari 5MB QuotaExceededError never breaks the UI
+        try {
+            sessionStorage.setItem('analysisData', JSON.stringify(data));
+            // Only store preview if under 500KB to stay safely within browser quota
+            const previewEl = document.getElementById("previewImage");
+            const previewSrc = (previewEl && previewEl.src.length < 500000) ? previewEl.src : (data.highlighted_image || '');
+            if (previewSrc && previewSrc.length < 500000) {
+                sessionStorage.setItem('previewImageSrc', previewSrc);
+            }
+        } catch (storageErr) {
+            console.warn("Storage quota reached, proceeding without session cache:", storageErr);
+        }
+
         renderResults(data);
     } catch (error) {
         if (error.name === 'AbortError') {
