@@ -87,8 +87,8 @@ class ImageComparison: # Core AI comparison class | CHANGE: Rename if adding non
                 if not sub_images:
                     continue
                 
-                # Sample up to 50 reference images per disease for ultra-fast comparison
-                MAX_PER_DISEASE = 50
+                # Sample up to 500 reference images per disease for high-accuracy comparison
+                MAX_PER_DISEASE = 500
                 if len(sub_images) > MAX_PER_DISEASE:
                     stride = max(1, len(sub_images) // MAX_PER_DISEASE)
                     sub_images = sub_images[::stride][:MAX_PER_DISEASE]
