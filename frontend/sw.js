@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rice-health-cache-v2'; // Unique name for this version of the cache
+const CACHE_NAME = 'rice-health-cache-v3'; // Unique name for this version of the cache
 const urlsToCache = [ // List of local assets that should be available offline
   '/',
   '/index.html',
@@ -8,45 +8,57 @@ const urlsToCache = [ // List of local assets that should be available offline
 ];
 
 self.addEventListener('install', event => { // Triggered when the service worker is first installed
-  event.waitUntil( // Ensures the installation doesn't finish until the cache is populated
-    caches.open(CACHE_NAME) // Create or open the specific cache container
+  self.skipWaiting(); // Force active immediately
+  event.waitUntil(
+    caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Opened cache'); // Log status for debugging
-        return cache.addAll(urlsToCache); // Download and store all listed files
+        console.log('Opened cache');
+        return cache.addAll(urlsToCache);
       })
   );
 });
 
-self.addEventListener('fetch', event => { // Intercepts every network request made by the app
-  // Network-first strategy: Always try to get fresh data, fallback to cache if offline
+self.addEventListener('fetch', event => {
+  // CRITICAL: Only cache GET requests. Caching POST requests throws "Request method 'POST' is unsupported"
+  if (event.request.method !== 'GET') {
+    return; // Let browser handle POST/upload directly without interception
+  }
+
+  // Do not intercept external backend API calls (e.g., Render, Weather)
+  if (!event.request.url.startsWith(self.location.origin)) {
+    return; // Direct network request
+  }
+
+  // Network-first strategy for local static assets: Try network, fallback to cache if offline
   event.respondWith(
-    fetch(event.request) // Attempt to fetch the resource from the live server
+    fetch(event.request)
       .then(response => {
-        // If network succeeds, update the cache and return the network response
-        const responseClone = response.clone(); // Clone the response because it can only be consumed once
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
+        }
+        const responseClone = response.clone();
         caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, responseClone); // Save the fresh copy in the cache
+          cache.put(event.request, responseClone);
         });
-        return response; // Deliver the live response to the browser
+        return response;
       })
-      .catch(() => { // Triggered if the network is unavailable (e.g. no signal in the rice field)
-        // If network fails (offline), return the version stored in the cache
+      .catch(() => {
         return caches.match(event.request);
       })
   );
 });
 
-self.addEventListener('activate', event => { // Triggered when a new version of the service worker takes control
-  const cacheWhitelist = [CACHE_NAME]; // List of caches we want to keep
+self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(cacheNames => { // Get all existing cache containers
+    caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map(cacheName => { // Loop through all caches found on the device
-          if (cacheWhitelist.indexOf(cacheName) === -1) { // If the cache is not in our whitelist
-            return caches.delete(cacheName); // Delete the old, outdated cache
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('Clearing old cache:', cacheName);
+            return caches.delete(cacheName);
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });
