@@ -47,6 +47,11 @@ os.makedirs(uploads_dir, exist_ok=True) # Automatically create upload directory 
 image_comparator = ImageComparison(reference_dir="dataset")
 print(f"[App] Reference image counts: {image_comparator.get_stats()}")
 
+# Pre-load Deep Learning Model so the first user scan doesn't incur a cold-start timeout
+from dl_analysis import load_dl_model
+load_dl_model()
+print("[App] Deep learning model pre-warmed successfully.")
+
 # Initialize the Flask Application
 app = Flask(__name__)
 CORS(app) # Enable CORS (Cross-Origin Resource Sharing) so our frontend pages can talk to port 5000
