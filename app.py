@@ -361,41 +361,42 @@ def analyze_rice_health(img, weather_condition="hot"):
             }
 
     # Resolve visual matches and merge heuristics
-    if dl_disease and dl_confidence >= 0.75:
-        # High confidence deep learning detection
-        confirmed_diseases          = [dl_disease]
-        possible_diseases           = [dl_disease]
-        visual_matches_formatted    = [{"name": dl_disease, "similarity": f"{dl_confidence:.2f}"}]
-    else:
-        # Fallback to feature comparisons and texture category metrics
-        visual_matches  = image_comparator.get_matching_diseases(img, threshold=visual_match_threshold)
-        visual_matches  = [(d, s) for d, s in visual_matches if d in SUPPORTED_DISEASES]
-        possible_diseases    = texture_diseases.copy()
-        visual_match_diseases = [name for name, score in visual_matches]
-        
-        for disease, _ in visual_matches:
-            if disease not in possible_diseases:
-                possible_diseases.append(disease)
-                
-        # Filter matches dynamically according to current weather category
-        possible_diseases = filter_diseases_by_weather(possible_diseases, weather_condition)
-        confirmed_diseases = []
-        
-        if visual_matches:
-            top_disease, top_score = visual_matches[0]
-            if top_score >= 0.60 and filter_diseases_by_weather([top_disease], weather_condition):
-                confirmed_diseases.append(top_disease)
-                
-        for disease in texture_diseases:
-            if disease in visual_match_diseases and disease not in confirmed_diseases:
-                if filter_diseases_by_weather([disease], weather_condition):
-                    confirmed_diseases.append(disease)
-                    
-        visual_matches_formatted = [
-            {"name": name, "similarity": f"{score:.2f}"}
-            for name, score in visual_matches
-            if filter_diseases_by_weather([name], weather_condition)
-        ]
+    visual_matches = image_comparator.get_matching_diseases(img, threshold=0.25, max_matches=5)
+    visual_matches = [(d, s) for d, s in visual_matches if d in SUPPORTED_DISEASES]
+    top_visual_disease = visual_matches[0][0] if visual_matches else None
+    top_visual_score = visual_matches[0][1] if visual_matches else 0.0
+
+    confirmed_diseases = []
+    possible_diseases = []
+
+    # 1. Deep Learning Model (MobileNetV2): trained on 50+ layers of visual feature representations
+    if dl_disease and dl_confidence >= 0.45:
+        possible_diseases.append(dl_disease)
+        # Confirm if DL is high confidence (>= 0.60) OR if it agrees with the top visual similarity match
+        if dl_confidence >= 0.60 or dl_disease == top_visual_disease:
+            confirmed_diseases.append(dl_disease)
+    elif top_visual_disease and top_visual_score >= 0.40:
+        # Fallback to visual dataset fingerprint matching if DL is uncertain
+        possible_diseases.append(top_visual_disease)
+        if top_visual_score >= 0.55:
+            confirmed_diseases.append(top_visual_disease)
+
+    # 2. Add top visual matches to possible diseases for differential diagnosis
+    for d, s in visual_matches[:3]:
+        if d not in possible_diseases and s >= 0.35:
+            possible_diseases.append(d)
+
+    # 3. Format visual matches for the UI report breakdown
+    visual_matches_formatted = []
+    if dl_disease and dl_confidence >= 0.30:
+        visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
+    for name, score in visual_matches:
+        if name != dl_disease and score >= 0.25:
+            visual_matches_formatted.append({"name": name, "similarity": f"{score:.2f}"})
+
+    # Filter according to weather context
+    possible_diseases = filter_diseases_by_weather(possible_diseases, weather_condition)
+    confirmed_diseases = [d for d in confirmed_diseases if d in possible_diseases]
 
     # "Healthy" is a classification but not a disease. Handle it to prevent marking healthy scans as diseased.
     if "Healthy" in confirmed_diseases:
