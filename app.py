@@ -29,6 +29,7 @@ from disease_db import (
     save_scan_record,
     # Admin Stats & Queries
     get_all_scan_records, get_all_users, delete_user_by_id, get_dashboard_stats,
+    admit_staff_user, reject_staff_user,
     # Disease DB CRUD Controls
     get_all_disease_advice, add_disease_advice, update_disease_advice, delete_disease_advice,
     get_scan_records_for_report
@@ -77,8 +78,8 @@ def require_auth(f):
 
 def require_admin(f):
     """
-    Decorator function: Restricts access to administrator profiles only.
-    Checks the user's role and returns 403 Forbidden if they are not an administrator.
+    Decorator function: Restricts access to administrator profiles or approved MAO Staff.
+    Checks the user's role and returns 403 Forbidden if they are not an administrator or approved staff.
     """
     @functools.wraps(f)
     def decorated(*args, **kwargs):
@@ -86,8 +87,10 @@ def require_admin(f):
         user = get_user_by_token(token)
         if not user:
             return jsonify({"error": "Authentication required."}), 401
-        if user['role'] != 'admin':
-            return jsonify({"error": "Admin access required."}), 403
+        is_admin = user.get('role') == 'admin'
+        is_approved_staff = user.get('role') == 'staff' and user.get('staff_status') == 'approved'
+        if not (is_admin or is_approved_staff):
+            return jsonify({"error": "Admin or approved MAO Staff access required."}), 403
         request.current_user = user # Inject user details
         return f(*args, **kwargs)
     return decorated
@@ -144,12 +147,19 @@ def register():
     if check_email_exists(email):
         return jsonify({"error": "This email is already registered."}), 409
 
+    staff_status = 'pending' if role == 'staff' else 'approved'
+
     # Add account record to users table
-    user_id = create_user(full_name, email, password, role, address, sex, age, barangay, contact_number)
+    user_id = create_user(full_name, email, password, role, staff_status, address, sex, age, barangay, contact_number)
     if not user_id:
         return jsonify({"error": "Registration failed. Please try again."}), 500
 
-    return jsonify({"message": "Account created successfully!", "user_id": user_id}), 201
+    if role == 'staff':
+        msg = "Account created! Since you registered as MAO Staff, your account requires Admin approval before accessing the Admin Panel. You may log in as a Farmer in the meantime."
+    else:
+        msg = "Account created successfully!"
+
+    return jsonify({"message": msg, "user_id": user_id, "role": role, "staff_status": staff_status}), 201
 
 
 @app.route("/login", methods=["POST"])
@@ -178,14 +188,15 @@ def login():
     return jsonify({
         "token": token,
         "user": {
-            "id":        user['id'],
-            "full_name": user['full_name'],
-            "email":     user['email'],
-            "role":      user['role'],
-            "address":   user.get('address', ''),
-            "sex":       user.get('sex', 'Male'),
-            "age":       user.get('age', 0),
-            "barangay":  user['barangay']
+            "id":           user['id'],
+            "full_name":    user['full_name'],
+            "email":        user['email'],
+            "role":         user['role'],
+            "staff_status": user.get('staff_status', 'approved'),
+            "address":      user.get('address', ''),
+            "sex":          user.get('sex', 'Male'),
+            "age":          user.get('age', 0),
+            "barangay":     user['barangay']
         }
     })
 
@@ -546,10 +557,34 @@ def admin_users():
 @require_admin
 def admin_delete_user(user_id):
     """Deletes a user account. Security rule: Admins cannot be deleted."""
+    if request.current_user.get('role') != 'admin':
+        return jsonify({"error": "Only the System Administrator can delete users."}), 403
     success = delete_user_by_id(user_id)
     if success:
         return jsonify({"message": "User deleted successfully."})
     return jsonify({"error": "Cannot delete this user (admin or not found)."}), 400
+
+@app.route("/admin/users/<int:user_id>/admit", methods=["POST"])
+@require_admin
+def admin_admit_staff(user_id):
+    """Admit a user as MAO Staff (admin only). Sets role to staff and staff_status to approved."""
+    if request.current_user.get('role') != 'admin':
+        return jsonify({"error": "Only the System Administrator can admit MAO Staff."}), 403
+    success = admit_staff_user(user_id)
+    if success:
+        return jsonify({"message": "User admitted as MAO Staff successfully!"})
+    return jsonify({"error": "Failed to admit user."}), 400
+
+@app.route("/admin/users/<int:user_id>/reject", methods=["POST"])
+@require_admin
+def admin_reject_staff(user_id):
+    """Reject a MAO Staff request. Automatically sets user to Farmer role (admin only)."""
+    if request.current_user.get('role') != 'admin':
+        return jsonify({"error": "Only the System Administrator can reject MAO Staff."}), 403
+    success = reject_staff_user(user_id)
+    if success:
+        return jsonify({"message": "MAO Staff request rejected. User is now listed as a Farmer."})
+    return jsonify({"error": "Failed to reject user."}), 400
 
 
 # --- 11. ADMIN DISEASE ADVICE MANAGEMENT (CRUD) ---

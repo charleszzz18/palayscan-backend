@@ -35,6 +35,8 @@ def run_auto_migrations(conn):
         
         if 'address' not in existing_cols:
             cursor.execute("ALTER TABLE users ADD COLUMN address VARCHAR(150) DEFAULT '' AFTER role")
+        if 'staff_status' not in existing_cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN staff_status VARCHAR(20) DEFAULT 'approved' AFTER role")
         if 'sex' not in existing_cols:
             cursor.execute("ALTER TABLE users ADD COLUMN sex VARCHAR(10) DEFAULT 'Male' AFTER address")
         if 'age' not in existing_cols:
@@ -63,10 +65,42 @@ def get_db_connection():
 
 # --- 2. PUBLIC USER & VISUAL ADVICE RETRIEVAL ---
 
+DEFAULT_ADVICE = {
+    "Blast": [
+        "Apply Tricyclazole or Isoprothiolane fungicide immediately.",
+        "Maintain proper water level and avoid excessive nitrogen fertilizer.",
+        "Avoid planting highly susceptible rice varieties in the next season."
+    ],
+    "Blight": [
+        "Apply Copper-based bactericides (e.g., Copper Oxychloride).",
+        "Drain the field to reduce humidity and stop bacterial spread.",
+        "Avoid applying too much nitrogen fertilizer which softens plant tissues."
+    ],
+    "Brown Spot": [
+        "Apply Mancozeb, Propiconazole, or Edifenphos fungicide.",
+        "Ensure proper soil nutrition, specifically Nitrogen, Phosphorus, and Potassium.",
+        "Treat seeds with hot water (53-54°C) for 10-12 minutes before planting."
+    ],
+    "Leaf Strip": [
+        "Apply Copper-based bactericides or Streptomycin.",
+        "Remove and burn infected leaves to prevent further spread.",
+        "Practice crop rotation to break the disease cycle."
+    ],
+    "Rust": [
+        "Apply Hexaconazole or Propiconazole fungicide.",
+        "Ensure good field drainage and weed management to increase air circulation.",
+        "Avoid planting late during the season as rust thrives in cooler late-season temperatures."
+    ],
+    "Healthy": [
+        "Walang kailangang gamot. Panatilihin ang regular na patubig at pag-aalaga.",
+        "Magpatuloy sa regular na pagsusuri ng palayan upang maagapan ang anumang peste."
+    ]
+}
+
 def get_advice(disease_name): 
     """
     Returns a list of treatment advice strings for the given disease from MariaDB.
-    Returns an empty list (never crashes) if database is unavailable or disease not found.
+    Falls back to curated default advice if the database query returns empty or fails.
     """
     if not disease_name: 
         return [] 
@@ -79,10 +113,16 @@ def get_advice(disease_name):
         )
         results = cursor.fetchall() 
         conn.close() 
-        return [row[0] for row in results] if results else [] 
-    except mariadb.Error as e: 
+        if results:
+            return [row[0] for row in results]
+    except Exception as e: 
         print(f"[DB] get_advice('{disease_name}') failed: {e}", file=sys.stderr) 
-        return [] 
+
+    # Return curated fallback advice if database has no records or errored
+    return DEFAULT_ADVICE.get(disease_name, [
+        f"Kumonsulta sa inyong lokal na Agriculture Officer para sa tamang gamot laban sa {disease_name}.",
+        "Ihiwalay ang mga apektadong halaman upang maiwasan ang pagkalat ng sakit."
+    ]) 
 
 def get_diseases_by_weather_from_db(weather_condition): 
     """
@@ -148,7 +188,7 @@ def check_email_exists(email):
         print(f"[DB] check_email_exists failed: {e}", file=sys.stderr)
         return False
 
-def create_user(full_name, email, password, role='farmer', address='', sex='Male', age=0, barangay='', contact_number=''):
+def create_user(full_name, email, password, role='farmer', staff_status='approved', address='', sex='Male', age=0, barangay='', contact_number=''):
     """
     Creates a new user profile.
     Uses Werkzeug's secure hashing (PBKDF2) to hash the password before database insertion.
@@ -159,14 +199,14 @@ def create_user(full_name, email, password, role='farmer', address='', sex='Male
         cursor = conn.cursor()
         password_hash = generate_password_hash(password) # Secure password hash
         cursor.execute(
-            "INSERT INTO users (full_name, email, password, role, address, sex, age, barangay, contact_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-            (full_name, email, password_hash, role, address, sex, int(age), barangay, contact_number)
+            "INSERT INTO users (full_name, email, password, role, staff_status, address, sex, age, barangay, contact_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (full_name, email, password_hash, role, staff_status, address, sex, int(age), barangay, contact_number)
         )
         conn.commit()
         user_id = cursor.lastrowid
         conn.close()
         return user_id
-    except mariadb.Error as e:
+    except Exception as e:
         print(f"[DB] create_user failed: {e}", file=sys.stderr)
         return None
 
@@ -176,16 +216,17 @@ def get_user_by_email(email):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, full_name, email, password, role, address, sex, age, barangay, contact_number FROM users WHERE email = %s",
+            "SELECT id, full_name, email, password, role, staff_status, address, sex, age, barangay, contact_number FROM users WHERE email = %s",
             (email,)
         )
         row = cursor.fetchone()
         conn.close()
         if row:
             return {'id': row[0], 'full_name': row[1], 'email': row[2],
-                    'password': row[3], 'role': row[4], 'address': row[5], 'sex': row[6], 'age': row[7], 'barangay': row[8], 'contact_number': row[9]}
+                    'password': row[3], 'role': row[4], 'staff_status': row[5] or 'approved',
+                    'address': row[6], 'sex': row[7], 'age': row[8], 'barangay': row[9], 'contact_number': row[10]}
         return None
-    except mariadb.Error as e:
+    except Exception as e:
         print(f"[DB] get_user_by_email failed: {e}", file=sys.stderr)
         return None
 
@@ -231,7 +272,7 @@ def get_user_by_token(token):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            """SELECT u.id, u.full_name, u.email, u.role, u.address, u.sex, u.age, u.barangay
+            """SELECT u.id, u.full_name, u.email, u.role, u.staff_status, u.address, u.sex, u.age, u.barangay
                FROM users u JOIN user_sessions s ON u.id = s.user_id
                WHERE s.token = %s AND s.expires_at > NOW()""",
             (token,)
@@ -239,9 +280,10 @@ def get_user_by_token(token):
         row = cursor.fetchone()
         conn.close()
         if row:
-            return {'id': row[0], 'full_name': row[1], 'email': row[2], 'role': row[3], 'address': row[4], 'sex': row[5], 'age': row[6], 'barangay': row[7]}
+            return {'id': row[0], 'full_name': row[1], 'email': row[2], 'role': row[3], 'staff_status': row[4] or 'approved',
+                    'address': row[5], 'sex': row[6], 'age': row[7], 'barangay': row[8]}
         return None
-    except mariadb.Error as e:
+    except Exception as e:
         print(f"[DB] get_user_by_token failed: {e}", file=sys.stderr)
         return None
 
@@ -320,18 +362,46 @@ def get_all_users():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, full_name, email, role, address, sex, age, barangay, contact_number, created_at FROM users ORDER BY created_at DESC"
+            "SELECT id, full_name, email, role, staff_status, address, sex, age, barangay, contact_number, created_at FROM users ORDER BY created_at DESC"
         )
         rows = cursor.fetchall()
         conn.close()
         return [{
-            'id': r[0], 'full_name': r[1], 'email': r[2], 'role': r[3],
-            'address': r[4] or '', 'sex': r[5] or '—', 'age': r[6] or 0,
-            'barangay': r[7] or '', 'contact_number': r[8] or '', 'created_at': str(r[9])
+            'id': r[0], 'full_name': r[1], 'email': r[2], 'role': r[3], 'staff_status': r[4] or 'approved',
+            'address': r[5] or '', 'sex': r[6] or '—', 'age': r[7] or 0,
+            'barangay': r[8] or '', 'contact_number': r[9] or '', 'created_at': str(r[10])
         } for r in rows]
-    except mariadb.Error as e:
+    except Exception as e:
         print(f"[DB] get_all_users failed: {e}", file=sys.stderr)
         return []
+
+def admit_staff_user(user_id):
+    """Admit a pending staff registration: sets role='staff', staff_status='approved'."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET role = 'staff', staff_status = 'approved' WHERE id = %s", (user_id,))
+        conn.commit()
+        affected = cursor.rowcount
+        conn.close()
+        return affected > 0
+    except Exception as e:
+        print(f"[DB] admit_staff_user failed: {e}", file=sys.stderr)
+        return False
+
+def reject_staff_user(user_id):
+    """Reject a staff registration: sets role='farmer', staff_status='rejected'. Automatically listed as farmer."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET role = 'farmer', staff_status = 'rejected' WHERE id = %s", (user_id,))
+        conn.commit()
+        affected = cursor.rowcount
+        conn.close()
+        return affected > 0
+    except Exception as e:
+        print(f"[DB] reject_staff_user failed: {e}", file=sys.stderr)
+        return False
 
 def delete_user_by_id(user_id):
     """Deletes user record. Security rule: Admins cannot be deleted."""
