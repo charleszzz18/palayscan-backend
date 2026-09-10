@@ -314,8 +314,8 @@ def analyze_rice_health(img, weather_condition="hot"):
     overlay[unhealthy_mask > 0] = [0, 0, 255] # BGR color format: Red
     highlighted = cv2.addWeighted(img, 0.6, overlay, 0.4, 0)
     
-    # Encode highlighted image into Base64 format for browser display
-    _, buffer = cv2.imencode('.jpg', highlighted)
+    # Encode highlighted image into Base64 format for browser display (compressed JPEG to keep payload small)
+    _, buffer = cv2.imencode('.jpg', highlighted, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
     highlighted_image_uri = f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
 
     # 7.2 Weather Sensitivity tuning
@@ -338,12 +338,12 @@ def analyze_rice_health(img, weather_condition="hot"):
         dl_disease = None
 
     # PHASE 1: Image Validation (Out of distribution check)
-    # If the deep learning model is highly unconfident, check visual similarity to see if it's even a rice leaf.
-    if dl_confidence < 0.40:
+    # Only reject if BOTH deep learning confidence is extremely low AND visual similarity is below 0.15
+    if dl_confidence < 0.25:
         raw_visual_matches = image_comparator.get_matching_diseases(img, threshold=0.0, max_matches=1)
         top_visual_score = raw_visual_matches[0][1] if raw_visual_matches else 0.0
         
-        if top_visual_score < 0.35:
+        if top_visual_score < 0.15:
             return {
                 "is_valid": False,
                 "message": "This image does not appear to be a clear rice leaf. Please upload a clear, focused picture of a rice leaf for accurate analysis."
@@ -465,6 +465,14 @@ def upload():
     if img is None:
         return jsonify({"error": "Could not process image"}), 400
 
+    # Downscale high-resolution images (smartphone cameras take 12MP+ photos,
+    # which causes 50+ second processing times and 6MB+ responses on CPU servers).
+    max_dim = 1024
+    h, w = img.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
     # Run analysis
     result = analyze_rice_health(img, weather_condition)
     
@@ -508,6 +516,12 @@ def ai_heal():
     if img is None:
         return jsonify({"error": "Could not process image"}), 400
 
+    max_dim = 1024
+    h, w = img.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
     # Locate yellow/brown spots and red highlight spots
     _, _, unhealthy_mask, _, _ = analyze_color(img)
     red_highlight_mask      = cv2.inRange(img, (0, 0, 200), (80, 80, 255))
@@ -528,7 +542,7 @@ def ai_heal():
     healed                  = cv2.cvtColor(hsv_f.astype("uint8"), cv2.COLOR_HSV2BGR)
     healed                  = cv2.GaussianBlur(healed, (3,3), 0) # Smooth out transitions
     
-    _, buffer               = cv2.imencode('.jpg', healed)
+    _, buffer               = cv2.imencode('.jpg', healed, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
     healed_image_uri        = f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
     return jsonify({"healed_image": healed_image_uri})
 

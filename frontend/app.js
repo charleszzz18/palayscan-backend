@@ -112,6 +112,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- 3. LIVE COORDINATES & ENVIRONMENTAL TEMPERATURE RETRIEVAL ---
 // Pulls live GPS details and requests temperature metrics from Open-Meteo API.
+// Helper: Client-side downscaling of large smartphone photos before network upload
+function compressImage(file, maxDimension = 1200, quality = 0.85) {
+    return new Promise((resolve) => {
+        if (!file || !file.type.startsWith('image/')) {
+            return resolve(file);
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                let { width, height } = img;
+                if (width <= maxDimension && height <= maxDimension) {
+                    return resolve(file); // Already small
+                }
+                if (width > height) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                } else {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob((blob) => {
+                    resolve(blob || file);
+                }, 'image/jpeg', quality);
+            };
+            img.onerror = () => resolve(file);
+            img.src = e.target.result;
+        };
+        reader.onerror = () => resolve(file);
+        reader.readAsDataURL(file);
+    });
+}
+
 // Environmental details are vital as disease spread is heavily dependent on weather (humidity & heat).
 async function analyzeImage(e) {
     if (e) e.preventDefault();
@@ -125,7 +163,7 @@ async function analyzeImage(e) {
     }
 
     resultsDiv.style.display = "block";
-    resultsDiv.innerHTML = `<div class="loading-status"><div class="loading-spinner"></div><p>Scanning weather and analyzing rice...</p></div>`;
+    resultsDiv.innerHTML = `<div class="loading-status"><div class="loading-spinner"></div><p>Optimizing image and checking weather...</p></div>`;
 
     let weatherVal = "hot"; // Default fallback
     const warningBox = document.getElementById("weatherWarningBox");
@@ -165,20 +203,19 @@ async function analyzeImage(e) {
         console.warn("Could not fetch GPS/Weather automatically, defaulting to Hot.", err);
     }
 
-    // Assemble form data package (Image file + Weather context)
-    const formData = new FormData();
-    formData.append("image", file);
-    formData.append("weather", weatherVal);
-
     try {
-        // Show a "waking up" message — Render free tier sleeps after 15 min of inactivity
-        // and the first request can take up to 60 seconds to wake the server back up.
-        resultsDiv.innerHTML = `<div class="error-message" style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);padding:20px;border-radius:12px;text-align:center;color:#166534;">
-            <p style="font-size:1.2rem;margin:0;">⏳ Waking up server...</p>
-            <p style="font-size:0.85rem;margin:8px 0 0 0;opacity:0.7;">This may take up to 60 seconds on first use. Please wait!</p>
-        </div>`;
+        // Show status while optimizing and sending
+        resultsDiv.innerHTML = `<div class="loading-status"><div class="loading-spinner"></div><p>Analyzing rice leaf...</p></div>`;
 
-        // 90-second timeout to allow Render's free server to wake up from sleep
+        // Downscale image client-side to ensure fast mobile upload and prevent network timeout
+        const uploadBlob = await compressImage(file, 1200, 0.85);
+
+        // Assemble form data package (Image file + Weather context)
+        const formData = new FormData();
+        formData.append("image", uploadBlob, "leaf.jpg");
+        formData.append("weather", weatherVal);
+
+        // 90-second timeout to allow Render's free server to wake up from sleep if needed
         const controller = new AbortController();
         const timeoutId  = setTimeout(() => controller.abort(), 90000);
 
@@ -190,6 +227,17 @@ async function analyzeImage(e) {
             signal: controller.signal,
         });
         clearTimeout(timeoutId);
+
+        if (response.status === 401) {
+            alert("Your session has expired. Please log in again.");
+            palayscanLogout();
+            return;
+        }
+
+        if (!response.ok) {
+            const errJson = await response.json().catch(() => ({}));
+            throw new Error(errJson.error || `Server returned error (${response.status})`);
+        }
         
         const data = await response.json();
         
@@ -218,9 +266,9 @@ async function analyzeImage(e) {
         renderResults(data);
     } catch (error) {
         if (error.name === 'AbortError') {
-            resultsDiv.innerHTML = `<div class="error-message"><p>⏱️ Server is still waking up...</p><p>Please try submitting the image again in a few seconds!</p></div>`;
+            resultsDiv.innerHTML = `<div class="error-message"><p>⏱️ Server request timed out.</p><p>Please try submitting the image again in a few seconds!</p></div>`;
         } else {
-            resultsDiv.innerHTML = `<div class="error-message"><p>❌ Error analyzing image</p><p>Check server connection.</p></div>`;
+            resultsDiv.innerHTML = `<div class="error-message"><p>❌ Error analyzing image</p><p>${error.message || 'Check server connection.'}</p></div>`;
         }
         console.error("Error:", error);
     }
