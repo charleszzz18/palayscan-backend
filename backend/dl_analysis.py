@@ -77,9 +77,9 @@ def analyze_with_dl(img): # Primary function for Deep Learning analysis
         img_array = np.expand_dims(img_resized, axis=0) # Add batch dimension
         img_array = img_array.astype('float32') / 255.0 # Rescale pixel values to [0, 1]
         
-        # Predict
-        predictions = _model.predict(img_array) # Run image through the neural network
-        predicted_class_idx = np.argmax(predictions[0]) # Get index of the highest probability
+        # Predict using fast, low-memory direct call
+        predictions = _model(img_array, training=False).numpy()
+        predicted_class_idx = int(np.argmax(predictions[0])) # Get index of highest probability
         confidence = float(predictions[0][predicted_class_idx]) # Extract the confidence score
         
         raw_label = _class_labels[predicted_class_idx] # Get the raw class label string
