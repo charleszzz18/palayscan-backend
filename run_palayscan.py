@@ -23,16 +23,14 @@ const API_BASE_URL = '{url}';
 
 def main():
     print("=" * 60)
-    print("   \ud83c\udf3e PALAYSCAN - AUTOMATIC SERVER LAUNCHER \ud83c\udf3e")
+    print("   [+] PALAYSCAN - AUTOMATIC SERVER LAUNCHER [+]")
     print("=" * 60)
     print("[1/3] Starting backend Flask server on port 5000...")
     
     # Start Flask backend
     flask_proc = subprocess.Popen(
         [sys.executable, "app.py"],
-        cwd=BACKEND_DIR,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        cwd=BACKEND_DIR
     )
     
     # Give Flask a brief moment to bind to port 5000
@@ -69,7 +67,7 @@ def main():
             break
             
     if not tunnel_url:
-        print("\n\u274c Failed to get Cloudflare Tunnel URL within 30 seconds.")
+        print("\n[!] Failed to get Cloudflare Tunnel URL within 30 seconds.")
         print("Falling back to local address: http://localhost:5000")
         tunnel_url = "http://localhost:5000"
     else:
@@ -77,15 +75,15 @@ def main():
         update_api_config(tunnel_url)
 
     print("\n" + "=" * 60)
-    print("   \u2705 PALAYSCAN IS NOW LIVE AND READY!")
+    print("   [OK] PALAYSCAN IS NOW LIVE AND READY!")
     print("=" * 60)
-    print(f"\n   \ud83c\udf10 Public Link (Share with anyone on any phone/PC):")
-    print(f"   \u27a1\ufe0f  {tunnel_url}\n")
-    print(f"   \ud83d\udcbb Local Link (For this PC):")
-    print(f"   \u27a1\ufe0f  http://localhost:5000\n")
+    print(f"\n   [*] Public Link (Share with anyone on any phone/PC):")
+    print(f"       ->  {tunnel_url}\n")
+    print(f"   [*] Local Link (For this PC):")
+    print(f"       ->  http://localhost:5000\n")
     print("=" * 60)
-    print("   \u2139\ufe0f  Keep this window open while using the app.")
-    print("   \u2139\ufe0f  Press CTRL + C to stop the server anytime.")
+    print("   [i] Keep this window open while using the app.")
+    print("   [i] Press CTRL + C to stop the server anytime.")
     print("=" * 60 + "\n")
 
     # Automatically open browser to the link
