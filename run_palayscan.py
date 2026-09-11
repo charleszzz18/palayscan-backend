@@ -5,6 +5,8 @@ import time
 import subprocess
 import webbrowser
 
+import threading
+
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
@@ -20,6 +22,17 @@ const API_BASE_URL = '{url}';
 """
     with open(API_CONFIG, "w", encoding="utf-8") as f:
         f.write(content)
+
+def sync_to_github_for_vercel(url):
+    """Automatically commits and pushes the new tunnel URL to GitHub so Vercel redeploys."""
+    try:
+        subprocess.run(["git", "add", "frontend/api_config.js"], cwd=ROOT_DIR, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        res = subprocess.run(["git", "commit", "-m", f"Auto-sync API URL for Vercel: {url}"], cwd=ROOT_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if res.returncode == 0:
+            subprocess.run(["git", "push", "origin", "master"], cwd=ROOT_DIR, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print("   [+] Vercel auto-sync: Pushed new URL to GitHub successfully!")
+    except Exception:
+        pass
 
 def main():
     print("=" * 60)
@@ -73,6 +86,7 @@ def main():
     else:
         # Update api_config.js with the new URL
         update_api_config(tunnel_url)
+        threading.Thread(target=sync_to_github_for_vercel, args=(tunnel_url,), daemon=True).start()
 
     print("\n" + "=" * 60)
     print("   [OK] PALAYSCAN IS NOW LIVE AND READY!")
