@@ -6,7 +6,7 @@
 import cv2 # Computer Vision library | CHANGE: Update if using a different image processing library
 import numpy as np # Numerical math library | CHANGE: Standard dependency
 
-def analyze_texture(img, sensitivity=1.0): # Texture analysis function | CHANGE: Add 'min_edge_threshold'
+def analyze_texture(img, sensitivity=1.0, return_metrics=False): # Texture analysis function | CHANGE: Add 'min_edge_threshold'
     """
     Analyze texture patterns in rice to detect potential diseases.
     """
@@ -67,57 +67,62 @@ def analyze_texture(img, sensitivity=1.0): # Texture analysis function | CHANGE:
     # --- 4. CALCULATE RATIOS ---
     # Find percentage of image covered by each symptom color
     total_pixels = img.shape[0] * img.shape[1] # Calculate the total number of pixels in the image
-    brown_ratio = float(cv2.countNonZero(brown_mask)) / total_pixels if total_pixels > 0 else 0 # Calculate ratio of brown symptoms
-    straw_ratio = float(cv2.countNonZero(straw_mask)) / total_pixels if total_pixels > 0 else 0 # Calculate ratio of straw symptoms
-    black_ratio = float(cv2.countNonZero(black_mask)) / total_pixels if total_pixels > 0 else 0 # Calculate ratio of black symptoms
-    white_ratio = float(cv2.countNonZero(white_mask)) / total_pixels if total_pixels > 0 else 0 # Calculate ratio of white symptoms
-    yellow_ratio = float(cv2.countNonZero(yellow_mask)) / total_pixels if total_pixels > 0 else 0 # Calculate ratio of yellow symptoms
-    orange_ratio = float(cv2.countNonZero(orange_mask)) / total_pixels if total_pixels > 0 else 0 # Calculate ratio of orange symptoms
-    gray_ratio = float(cv2.countNonZero(gray_mask)) / total_pixels if total_pixels > 0 else 0 # Calculate ratio of gray symptoms
-    
-    # --- 5. APPLY WEATHER SENSITIVITY ---
-    # Boost ratios if weather is difficult for detection
-    brown_ratio *= sensitivity # Adjust brown ratio based on sensitivity input
-    straw_ratio *= sensitivity # Adjust straw ratio based on sensitivity input
-    black_ratio *= sensitivity # Adjust black ratio based on sensitivity input
-    white_ratio *= sensitivity # Adjust white ratio based on sensitivity input
-    yellow_ratio *= sensitivity # Adjust yellow ratio based on sensitivity input
-    orange_ratio *= sensitivity # Adjust orange ratio based on sensitivity input
-    gray_ratio *= sensitivity # Adjust gray ratio based on sensitivity input
+    raw_brown = float(cv2.countNonZero(brown_mask)) / total_pixels if total_pixels > 0 else 0
+    raw_straw = float(cv2.countNonZero(straw_mask)) / total_pixels if total_pixels > 0 else 0
+    raw_black = float(cv2.countNonZero(black_mask)) / total_pixels if total_pixels > 0 else 0
+    raw_white = float(cv2.countNonZero(white_mask)) / total_pixels if total_pixels > 0 else 0
+    raw_yellow = float(cv2.countNonZero(yellow_mask)) / total_pixels if total_pixels > 0 else 0
+    raw_orange = float(cv2.countNonZero(orange_mask)) / total_pixels if total_pixels > 0 else 0
+    raw_gray = float(cv2.countNonZero(gray_mask)) / total_pixels if total_pixels > 0 else 0
+
+    brown_ratio = raw_brown * sensitivity
+    straw_ratio = raw_straw * sensitivity
+    black_ratio = raw_black * sensitivity
+    white_ratio = raw_white * sensitivity
+    yellow_ratio = raw_yellow * sensitivity
+    orange_ratio = raw_orange * sensitivity
+    gray_ratio = raw_gray * sensitivity
     
     # Debug report
     print(f"Texture Analysis - Edge density: {edge_density}, Brown ratio: {brown_ratio}, " +
           f"Straw ratio: {straw_ratio}, Black ratio: {black_ratio}, White ratio: {white_ratio}, " +
-          f"Yellow ratio: {yellow_ratio}, Orange ratio: {orange_ratio}, Gray ratio: {gray_ratio}") # Print diagnostic log
+          f"Yellow ratio: {yellow_ratio}, Orange ratio: {orange_ratio}, Gray ratio: {gray_ratio}")
     
     # --- 6. DISEASE LOGIC RULES ---
-    # Map symptoms to specific disease names
-    possible_diseases = [] # Initialize list for identified diseases
+    possible_diseases = []
     
-
-    # RULE: Brown Spot (Lower brown + lower texture)
-    if brown_ratio > 0.05 and edge_density < 0.15: # Check for Brown Spot symptoms
+    # RULE: Brown Spot (Brown presence, low gray center)
+    if brown_ratio > 0.03:
         possible_diseases.append("Brown Spot")
         
     # RULE: Leaf Strip (Thin linear streaks)
-    if brown_ratio > 0.05 and edge_density > 0.10: # High edge density due to thin lines
+    if brown_ratio > 0.05 and edge_density > 0.10:
         possible_diseases.append("Leaf Strip")
 
     # RULE: Blight (Streaks - white/straw + high texture)
-    if edge_density > 0.10 and (straw_ratio > 0.05 or white_ratio > 0.05): # Check for Blight streaks
+    if edge_density > 0.10 and (straw_ratio > 0.05 or white_ratio > 0.05):
         possible_diseases.append("Blight")
     
     # RULE: Blast (Brown borders with gray centers)
-    if brown_ratio > 0.05 and gray_ratio > 0.02: 
+    if brown_ratio > 0.03 and gray_ratio > 0.015: 
         possible_diseases.append("Blast")
         
     # RULE: Rust (Orange/rust colored spots)
     if orange_ratio > 0.03 or (brown_ratio > 0.08 and orange_ratio > 0.01): 
         possible_diseases.append("Rust")
- 
 
-    
     # --- 7. CLEAN UP RESULTS ---
-    possible_diseases = list(set(possible_diseases)) # Filter out any duplicate disease names
-    
-    return possible_diseases # Return the final list of possible diseases to the caller
+    possible_diseases = list(set(possible_diseases))
+
+    if return_metrics:
+        return possible_diseases, {
+            'edge_density': float(edge_density),
+            'brown_ratio': float(raw_brown),
+            'straw_ratio': float(raw_straw),
+            'black_ratio': float(raw_black),
+            'white_ratio': float(raw_white),
+            'yellow_ratio': float(raw_yellow),
+            'orange_ratio': float(raw_orange),
+            'gray_ratio': float(raw_gray)
+        }
+    return possible_diseases

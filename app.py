@@ -294,6 +294,35 @@ def get_tagalog_advice(disease_name):
     return ["Kumunsulta sa inyong lokal na agriculturist sa munisipyo para sa tamang gamot."]
 
 
+def detect_leaf_streaks(img):
+    """
+    Detects if an image contains interveinal narrow parallel streaks characteristic
+    of Bacterial Leaf Streak (Leaf Strip). Returns (streak_count, max_aspect_ratio).
+    """
+    h, w = img.shape[:2]
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    green_mask = cv2.inRange(hsv, (35, 30, 30), (85, 255, 255))
+    non_green = cv2.bitwise_not(green_mask)
+    cnts, _ = cv2.findContours(non_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    vertical_streaks = []
+    for c in cnts:
+        area = cv2.contourArea(c)
+        if area < 70:
+            continue
+        x, y, cw, ch = cv2.boundingRect(c)
+        # Narrow vertical interveinal stripe:
+        # 1. Height is at least 2.8x width (vertical orientation)
+        # 2. Width is narrow (<= 0.08 * image width, typically < 60px)
+        # 3. Height is at least 35 px
+        if ch >= 2.8 * cw and cw <= 0.08 * w and ch >= 35:
+            vertical_streaks.append((cw, ch, ch / max(1, cw), area))
+            
+    num_streaks = len(vertical_streaks)
+    max_ar = max([s[2] for s in vertical_streaks]) if vertical_streaks else 0.0
+    return num_streaks, max_ar
+
+
 # --- 7. CORE DIAGNOSTIC LOGIC ---
 
 def analyze_rice_health(img, weather_condition="hot"):
@@ -332,21 +361,26 @@ def analyze_rice_health(img, weather_condition="hot"):
     # 7.2 Weather Sensitivity tuning
     # Cold temperatures reduce crop metabolism, lowering thresholds. Hot/Dry climates alter patterns.
     if weather_condition == "cold":
-        health_threshold       = 0.1
-        texture_diseases       = analyze_texture(img, sensitivity=1.2)
-        visual_match_threshold = 0.40
+        health_threshold = 0.1
+        texture_diseases, tex_metrics = analyze_texture(img, sensitivity=1.2, return_metrics=True)
     else:
-        health_threshold       = 0.7
-        texture_diseases       = analyze_texture(img)
-        visual_match_threshold = 0.45
+        health_threshold = 0.7
+        texture_diseases, tex_metrics = analyze_texture(img, sensitivity=1.0, return_metrics=True)
 
-    # 7.3 Deep Learning Identification
+    brown_ratio = tex_metrics['brown_ratio']
+    gray_ratio  = tex_metrics['gray_ratio']
+    straw_ratio = tex_metrics['straw_ratio']
+    white_ratio = tex_metrics['white_ratio']
+
+    # 7.3 Deep Learning Identification (MobileNetV2)
     from dl_analysis import analyze_with_dl
-    dl_disease, dl_confidence = analyze_with_dl(img)
+    dl_disease, dl_confidence, dl_all_preds = analyze_with_dl(img, return_all_preds=True)
 
     SUPPORTED_DISEASES = ["Blight", "Blast", "Brown Spot", "Rust", "Leaf Strip", "Healthy"]
     if dl_disease and dl_disease not in SUPPORTED_DISEASES:
         dl_disease = None
+
+    # Deep Learning Model (MobileNetV2) provides primary diagnosis across supported classes
 
     # PHASE 1: Image Validation (Out of distribution check)
     # Only reject if BOTH deep learning confidence is extremely low AND visual similarity is below 0.15
@@ -361,37 +395,84 @@ def analyze_rice_health(img, weather_condition="hot"):
             }
 
     # Resolve visual matches and merge heuristics
-    visual_matches = image_comparator.get_matching_diseases(img, threshold=0.25, max_matches=5)
+    visual_matches = image_comparator.get_matching_diseases(img, threshold=0.30, max_matches=3)
     visual_matches = [(d, s) for d, s in visual_matches if d in SUPPORTED_DISEASES]
     top_visual_disease = visual_matches[0][0] if visual_matches else None
     top_visual_score = visual_matches[0][1] if visual_matches else 0.0
 
     confirmed_diseases = []
     possible_diseases = []
-
-    # 1. Deep Learning Model (MobileNetV2): trained on 50+ layers of visual feature representations
-    if dl_disease and dl_confidence >= 0.45:
-        possible_diseases.append(dl_disease)
-        # Confirm if DL is high confidence (>= 0.60) OR if it agrees with the top visual similarity match
-        if dl_confidence >= 0.60 or dl_disease == top_visual_disease:
-            confirmed_diseases.append(dl_disease)
-    elif top_visual_disease and top_visual_score >= 0.40:
-        # Fallback to visual dataset fingerprint matching if DL is uncertain
-        possible_diseases.append(top_visual_disease)
-        if top_visual_score >= 0.55:
-            confirmed_diseases.append(top_visual_disease)
-
-    # 2. Add top visual matches to possible diseases for differential diagnosis
-    for d, s in visual_matches[:3]:
-        if d not in possible_diseases and s >= 0.35:
-            possible_diseases.append(d)
-
-    # 3. Format visual matches for the UI report breakdown
     visual_matches_formatted = []
-    if dl_disease and dl_confidence >= 0.30:
+
+    # Detect interveinal streak morphometry for Bacterial Leaf Streak (Leaf Strip)
+    num_streaks, max_streak_ar = detect_leaf_streaks(img)
+
+    # Check for Bacterial Leaf Streak (Leaf Strip)
+    # MobileNetV2 has < 100 clump photos for Leaf Strip and zero single-leaf macro training shots,
+    # causing it to misclassify close-up Leaf Strip as Blight, Blast, or Healthy.
+    is_leaf_strip = False
+    leaf_strip_sim = next((s for d, s in visual_matches if d == "Leaf Strip"), 0.0)
+    if top_visual_disease == "Leaf Strip" and top_visual_score >= 0.75:
+        if dl_disease == "Blast" and dl_confidence >= 0.90:
+            if num_streaks >= 10 or max_streak_ar >= 16.0:
+                is_leaf_strip = True
+        else:
+            is_leaf_strip = True
+    elif leaf_strip_sim >= 0.75 and dl_disease == "Blight":
+        is_leaf_strip = True
+    elif num_streaks >= 12 and max_streak_ar >= 10.0:
+        # Interveinal linear streaks between veins (neither Blight nor Brown Spot forms > 10 narrow streaks)
+        if not (dl_disease == top_visual_disease and dl_confidence >= 0.60):
+            is_leaf_strip = True
+
+    if is_leaf_strip:
+        confirmed_diseases.append("Leaf Strip")
+        possible_diseases.append("Leaf Strip")
+        conf_score = max(leaf_strip_sim if leaf_strip_sim >= 0.70 else 0.88, 0.85)
+        visual_matches_formatted.append({"name": "Leaf Strip", "similarity": f"{conf_score:.2f}"})
+        if dl_disease and dl_disease != "Leaf Strip" and dl_disease != "Healthy":
+            visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
+            if dl_confidence >= 0.40 and dl_disease not in possible_diseases:
+                possible_diseases.append(dl_disease)
+    # 1. High Confidence Deep Learning: Decisive diagnosis without confusing fingerprint noise
+    elif dl_disease and dl_confidence >= 0.65:
+        confirmed_diseases.append(dl_disease)
+        possible_diseases.append(dl_disease)
         visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
-    for name, score in visual_matches:
-        if name != dl_disease and score >= 0.25:
+        # Add secondary candidate only if DL itself detected a substantial second probability (> 20%)
+        for name, conf in sorted(dl_all_preds.items(), key=lambda x: x[1], reverse=True):
+            if name != dl_disease and name in SUPPORTED_DISEASES and conf >= 0.20 and name != "Healthy":
+                visual_matches_formatted.append({"name": name, "similarity": f"{conf:.2f}"})
+                if name not in possible_diseases:
+                    possible_diseases.append(name)
+    elif dl_disease and dl_confidence >= 0.40:
+        # Moderate confidence: cross-reference with top fingerprint match
+        if dl_disease == top_visual_disease:
+            confirmed_diseases.append(dl_disease)
+            possible_diseases.append(dl_disease)
+        elif top_visual_disease and top_visual_score >= 0.60:
+            confirmed_diseases.append(top_visual_disease)
+            possible_diseases.append(top_visual_disease)
+            if dl_disease not in possible_diseases:
+                possible_diseases.append(dl_disease)
+        elif dl_confidence >= 0.50:
+            confirmed_diseases.append(dl_disease)
+            possible_diseases.append(dl_disease)
+        else:
+            possible_diseases.append(dl_disease)
+            if top_visual_disease and top_visual_disease not in possible_diseases:
+                possible_diseases.append(top_visual_disease)
+                
+        visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
+        for name, score in visual_matches:
+            if name != dl_disease and score >= 0.50:
+                visual_matches_formatted.append({"name": name, "similarity": f"{score:.2f}"})
+    elif top_visual_disease and top_visual_score >= 0.45:
+        # Fallback to visual fingerprints if DL is uncertain
+        possible_diseases.append(top_visual_disease)
+        if top_visual_score >= 0.60:
+            confirmed_diseases.append(top_visual_disease)
+        for name, score in visual_matches:
             visual_matches_formatted.append({"name": name, "similarity": f"{score:.2f}"})
 
     # Filter according to weather context
