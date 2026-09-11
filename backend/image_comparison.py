@@ -1,208 +1,184 @@
 # ==========================================
-# RICE HEALTH APP - IMAGE COMPARISON MODULE
+# RICE HEALTH APP - VECTORIZED IMAGE COMPARISON MODULE (image_comparison.py)
 # ==========================================
-# This file takes the user's uploaded image and compares it against
-# a folder of known disease reference images to find the closest match.
+# Compares user uploaded images against 13,480 reference dataset fingerprints
+# using pre-stacked NumPy matrices and sub-millisecond vectorized cosine similarity.
 
-import cv2 # Computer Vision library | CHANGE: Update if using a different image processing library
-import numpy as np # Numerical math library | CHANGE: Standard dependency
-import os # System path library | CHANGE: Standard dependency
+import cv2
+import numpy as np
+import os
 import sys
 import pickle
-import glob # Filename pattern matching | CHANGE: Standard dependency
-import re # Regular expression library | CHANGE: Use for name cleaning
-from pathlib import Path # Path object management | CHANGE: Modern way to handle file paths
-from concurrent.futures import ThreadPoolExecutor # Parallel processing | CHANGE: Remove for low-power systems
+import glob
+import re
+from pathlib import Path
 
-class ImageComparison: # Core AI comparison class | CHANGE: Rename if adding non-image comparison features
-    def __init__(self, reference_dir, cache_file="fingerprints.pkl"):
-        """
-        Initializes the ImageComparison object and loads ALL reference images.
-        """
-        self.reference_dir = reference_dir # Store the root path of the reference dataset
-        self.cache_file = cache_file # Path to save/load pre-computed features
-        self.reference_images = {} # Dictionary to store disease names and their corresponding image fingerprints
-        self.load_reference_images() # Trigger the initial data loading process
-
-    # ------------------------------------------------------------------
-    # DISEASE NAME NORMALIZATION MAP
-    # ------------------------------------------------------------------
-    # Maps any folder name or filename to the official database name.
-    # ------------------------------------------------------------------
-    NAME_MAP = { # Translation table for standardizing disease folder names
+class ImageComparison:
+    NAME_MAP = {
         "blight":             "Blight",
         "blast":              "Blast",
         "brown spot":         "Brown Spot",
+        "brownspot":          "Brown Spot",
         "rust":               "Rust",
         "leaf strip":         "Leaf Strip",
+        "leaf streak":        "Leaf Strip",
+        "leafstrip":          "Leaf Strip",
         "healthy":            "Healthy",
     }
 
-    def _normalize_disease_name(self, raw_name): # Clean up messy names | CHANGE: Add advanced regex for specific filenames
-        """
-        Converts folder names into official database names.
-        """
-        cleaned = re.sub(r'[_ \-]\d+$', '', raw_name).strip() # Use Regex to strip trailing numbers from folder names
-        lower = cleaned.lower() # Convert name to lowercase for case-insensitive matching
-        if lower in self.NAME_MAP: # Check if the cleaned name exists in our mapping table
-            return self.NAME_MAP[lower] # Return the mapped official name
-        return cleaned.title() # Default to title case if no mapping is found | CHANGE: Return 'Unknown' instead of raw name
+    def __init__(self, reference_dir, cache_file="fingerprints.pkl"):
+        self.reference_dir = reference_dir
+        self.cache_file = cache_file
+        self.matrices = {}       # {disease_name: np.ndarray of shape (N, 196)}
+        self.counts = {}         # {disease_name: int}
+        self.reference_images = {} # Backward-compatibility alias
+        self.load_reference_images()
 
-    def load_reference_images(self):
-        """
-        Scans the reference directory and extracts fingerprints from all images,
-        or loads them directly from a cache file if it exists.
-        """
-        # 1. Try to load from cache first
-        if self.cache_file and os.path.exists(self.cache_file):
-            print(f"[ImageComparison] Loading pre-computed fingerprints from {self.cache_file}...")
-            try:
-                with open(self.cache_file, 'rb') as f:
-                    self.reference_images = pickle.load(f)
-                count = sum(len(v) for v in self.reference_images.values())
-                print(f"[ImageComparison] Loaded {count} fingerprints from cache.")
-                return # Skip image processing!
-            except Exception as e:
-                print(f"[ImageComparison] Error loading cache: {e}. Falling back to image processing.")
-                self.reference_images = {}
-
-        # 2. If no cache, process images from dataset directory
-        actual_dir = self.reference_dir
-        if not os.path.exists(actual_dir):
-            print(f"[ImageComparison] WARNING: Reference directory not found: {self.reference_dir}")
-            return
-
-        # Auto-detect if disease classes are nested inside a subfolder (e.g. dataset/Rice Disease/...)
-        sub_dir = os.path.join(actual_dir, "Rice Disease")
-        if os.path.exists(sub_dir) and os.path.isdir(sub_dir):
-            actual_dir = sub_dir
-
-        total_loaded = 0
-        for entry in os.scandir(actual_dir):
-            if entry.is_dir():
-                disease_name = self._normalize_disease_name(entry.name)
-                sub_images = []
-                for ext in ('*.jpg', '*.jpeg', '*.png'):
-                    sub_images += glob.glob(os.path.join(entry.path, '**', ext), recursive=True)
-                if not sub_images:
-                    continue
-                
-                # Sample up to 500 reference images per disease for high-accuracy comparison
-                MAX_PER_DISEASE = 500
-                if len(sub_images) > MAX_PER_DISEASE:
-                    stride = max(1, len(sub_images) // MAX_PER_DISEASE)
-                    sub_images = sub_images[::stride][:MAX_PER_DISEASE]
-                
-                if disease_name not in self.reference_images:
-                    self.reference_images[disease_name] = []
-                for img_path in sub_images:
-                    img = cv2.imread(img_path)
-                    if img is not None:
-                        self.reference_images[disease_name].append(self._extract_features(img))
-                        total_loaded += 1
-
-        print(f"[ImageComparison] Loaded {total_loaded} images.")
-        
-        # 3. Save newly extracted features to cache
-        if self.cache_file and self.reference_images:
-            print(f"[ImageComparison] Saving fingerprints to {self.cache_file}...")
-            try:
-                with open(self.cache_file, 'wb') as f:
-                    pickle.dump(self.reference_images, f)
-                print("[ImageComparison] Fingerprints saved successfully.")
-            except Exception as e:
-                print(f"[ImageComparison] Error saving cache: {e}")
+    def _normalize_disease_name(self, raw_name):
+        cleaned = re.sub(r'[_ \-]\d+$', '', raw_name).strip().lower()
+        return self.NAME_MAP.get(cleaned, raw_name.strip().title())
 
     def _extract_features(self, img):
         """
-        Converts an image into a numerical summary of colors and textures.
-        Outputs pure Python types for universal NumPy 1.x / 2.x pickle compatibility.
+        Extracts 196-dimensional, L2-normalized feature representation:
+        - 96 global HSV histogram features
+        - 96 lesion-specific HSV histogram features
+        - 4 structural & edge metrics (std_dev, edge_density, laplacian_var, lesion_ratio)
         """
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        h_hist = cv2.calcHist([hsv], [0], None, [64], [0, 180])
-        s_hist = cv2.calcHist([hsv], [1], None, [64], [0, 256])
-        v_hist = cv2.calcHist([hsv], [2], None, [64], [0, 256])
-        cv2.normalize(h_hist, h_hist, 0, 1, cv2.NORM_MINMAX)
-        cv2.normalize(s_hist, s_hist, 0, 1, cv2.NORM_MINMAX)
-        cv2.normalize(v_hist, v_hist, 0, 1, cv2.NORM_MINMAX)
-        
-        resized = cv2.resize(img, (256, 256))
-        gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-        std_dev = float(np.std(gray))
+        if img is None or img.size == 0:
+            return np.zeros(196, dtype=np.float32)
+
+        img_256 = cv2.resize(img, (256, 256), interpolation=cv2.INTER_AREA)
+        hsv = cv2.cvtColor(img_256, cv2.COLOR_BGR2HSV)
+
+        # 1. Global HSV histograms (32 bins each)
+        h_glob = cv2.calcHist([hsv], [0], None, [32], [0, 180]).flatten()
+        s_glob = cv2.calcHist([hsv], [1], None, [32], [0, 256]).flatten()
+        v_glob = cv2.calcHist([hsv], [2], None, [32], [0, 256]).flatten()
+
+        # 2. Lesion Mask (detect necrotic / discolored tissue vs healthy green)
+        h_chan, s_chan, v_chan = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+        green_mask = (h_chan >= 35) & (h_chan <= 88) & (s_chan >= 40) & (v_chan >= 30)
+        lesion_mask = (~green_mask) & (v_chan >= 20)
+        lesion_mask_uint8 = (lesion_mask * 255).astype(np.uint8)
+        lesion_ratio = float(np.count_nonzero(lesion_mask) / (256 * 256))
+
+        if np.count_nonzero(lesion_mask) > 50:
+            h_lesion = cv2.calcHist([hsv], [0], lesion_mask_uint8, [32], [0, 180]).flatten()
+            s_lesion = cv2.calcHist([hsv], [1], lesion_mask_uint8, [32], [0, 256]).flatten()
+            v_lesion = cv2.calcHist([hsv], [2], lesion_mask_uint8, [32], [0, 256]).flatten()
+        else:
+            h_lesion = np.zeros(32, dtype=np.float32)
+            s_lesion = np.zeros(32, dtype=np.float32)
+            v_lesion = np.zeros(32, dtype=np.float32)
+
+        # 3. Structural & Edge features
+        gray = cv2.cvtColor(img_256, cv2.COLOR_BGR2GRAY)
+        std_dev = float(np.std(gray)) / 128.0
         edges = cv2.Canny(gray, 50, 150)
-        edge_density = float(np.sum(edges) / (edges.shape[0] * edges.shape[1] * 255))
-        
-        return {
-            'h_hist': h_hist.flatten().tolist(),
-            's_hist': s_hist.flatten().tolist(),
-            'v_hist': v_hist.flatten().tolist(),
-            'std_dev': std_dev,
-            'edge_density': edge_density,
-        }
+        edge_density = float(np.count_nonzero(edges) / (256 * 256))
+        laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var()) / 1000.0
 
-    def _score_disease(self, disease_name, features_list, img_features):
+        def norm_vec(v):
+            n = np.linalg.norm(v)
+            return (v / n) if n > 1e-6 else v
+
+        glob_vec = norm_vec(np.concatenate([h_glob, s_glob, v_glob]))
+        lesion_vec = norm_vec(np.concatenate([h_lesion, s_lesion, v_lesion]))
+        struct_vec = np.array([std_dev, edge_density, laplacian_var, lesion_ratio], dtype=np.float32)
+
+        composite = np.concatenate([glob_vec * 0.45, lesion_vec * 0.45, struct_vec * 0.10]).astype(np.float32)
+        return norm_vec(composite)
+
+    def load_reference_images(self):
         """
-        Compares user features against a list of reference features for ONE disease.
+        Loads pre-computed matrix fingerprints from cache file (v2.0 vectorized),
+        or falls back to extracting directly from dataset.
         """
-        # Convert user features to float32 numpy arrays for cv2.compareHist
-        img_h = np.asarray(img_features['h_hist'], dtype=np.float32).reshape(64, 1)
-        img_s = np.asarray(img_features['s_hist'], dtype=np.float32).reshape(64, 1)
-        img_v = np.asarray(img_features['v_hist'], dtype=np.float32).reshape(64, 1)
+        cache_path = self.cache_file
+        if not os.path.isabs(cache_path):
+            cache_path = os.path.join(os.path.dirname(__file__), cache_path)
 
-        all_scores = []
-        for ref_features in features_list:
-            ref_h = np.asarray(ref_features['h_hist'], dtype=np.float32).reshape(64, 1)
-            ref_s = np.asarray(ref_features['s_hist'], dtype=np.float32).reshape(64, 1)
-            ref_v = np.asarray(ref_features['v_hist'], dtype=np.float32).reshape(64, 1)
+        if os.path.exists(cache_path):
+            print(f"[ImageComparison] Loading pre-computed fingerprints from {cache_path}...")
+            try:
+                with open(cache_path, 'rb') as f:
+                    data = pickle.load(f)
 
-            h_sim = max(cv2.compareHist(img_h, ref_h, cv2.HISTCMP_CORREL), 0.0)
-            s_sim = max(cv2.compareHist(img_s, ref_s, cv2.HISTCMP_CORREL), 0.0)
-            v_sim = max(cv2.compareHist(img_v, ref_v, cv2.HISTCMP_CORREL), 0.0)
+                if isinstance(data, dict) and 'matrices' in data:
+                    # Version 2.0 vectorized matrix format
+                    self.matrices = data['matrices']
+                    self.counts = data.get('counts', {k: len(v) for k, v in self.matrices.items()})
+                    total = sum(self.counts.values())
+                    print(f"[ImageComparison] Loaded {total} vectorized fingerprints across {len(self.matrices)} classes.")
+                    self.reference_images = {k: list(range(v)) for k, v in self.counts.items()}
+                    return
+                elif isinstance(data, dict):
+                    # Legacy v1 format (dict of lists)
+                    self.reference_images = data
+                    self.counts = {k: len(v) for k, v in data.items()}
+                    print(f"[ImageComparison] Loaded legacy cache with {sum(self.counts.values())} entries.")
+                    return
+            except Exception as e:
+                print(f"[ImageComparison] Error loading cache: {e}. Falling back to generation.")
 
-            max_std = max(img_features['std_dev'], ref_features['std_dev'])
-            tex_sim = max(1 - (abs(img_features['std_dev'] - ref_features['std_dev']) / max_std), 0.0) if max_std > 0 else 1.0
-            max_edge = max(img_features['edge_density'], ref_features['edge_density'])
-            edge_sim = max(1 - (abs(img_features['edge_density'] - ref_features['edge_density']) / max_edge), 0.0) if max_edge > 0 else 1.0
+        # If cache not found, run extractor automatically
+        try:
+            from generate_fingerprints import build_all_fingerprints
+            if build_all_fingerprints():
+                with open(cache_path, 'rb') as f:
+                    data = pickle.load(f)
+                self.matrices = data['matrices']
+                self.counts = data.get('counts', {k: len(v) for k, v in self.matrices.items()})
+                self.reference_images = {k: list(range(v)) for k, v in self.counts.items()}
+        except Exception as e:
+            print(f"[ImageComparison] Automatic build failed: {e}")
 
-            # Rice disease visual patterns are dominated by lesion hue and saturation
-            score = (h_sim * 0.45 + s_sim * 0.35 + v_sim * 0.10 + tex_sim * 0.05 + edge_sim * 0.05)
-            all_scores.append(score)
-
-        if not all_scores:
-            return (disease_name, 0.0)
-        all_scores.sort(reverse=True)
-        top_n = min(len(all_scores), 3)
-        avg_score = sum(all_scores[:top_n]) / top_n
-        return (disease_name, float(avg_score))
-
-    def compare_image(self, img): # Main entry point for search | CHANGE: Limit searching to certain categories
+    def compare_image(self, img):
         """
-        Searches the database for the most similar diseases in parallel.
+        Performs sub-millisecond vectorized k-NN search across all reference images.
+        Computes cosine similarity against entire dataset matrix in a single dot-product.
+        Returns: list of (disease_name, score) sorted descending.
         """
-        if not self.reference_images: return [] # Exit if no reference data is loaded
-        img_features = self._extract_features(img) # Extract features from the user's uploaded image
-        with ThreadPoolExecutor() as executor: # Initialize parallel processing to speed up comparison
-            futures = [] # List to track asynchronous tasks
-            for name, flist in self.reference_images.items(): # Iterate through all loaded disease categories
-                if name.lower() == 'healthy': continue # Skip the 'Healthy' category during disease matching
-                futures.append(executor.submit(self._score_disease, name, flist, img_features)) # Queue comparison task
-            similarities = [f.result() for f in futures] # Wait for and collect results from all threads
-        similarities.sort(key=lambda x: x[1], reverse=True) # Sort the entire list by similarity score (descending)
-        return similarities # Return the ranked list of similarities
+        if not self.matrices:
+            return []
 
-    def get_matching_diseases(self, img, threshold=0.45, max_matches=3): # Filtered API | CHANGE: Add 'min_confidence' parameter
+        q = self._extract_features(img)
+        results = []
+
+        for name, mat in self.matrices.items():
+            if name.lower() == 'healthy':
+                continue  # 'Healthy' evaluated separately in health scoring
+
+            # Vectorized Cosine Similarity: (N, 196) . (196,) -> (N,)
+            sims = np.dot(mat, q)
+            if len(sims) == 0:
+                continue
+
+            # Top-15 nearest neighbors with rank-decay weighting for high precision
+            k = min(15, len(sims))
+            # Partition top k values efficiently
+            top_k_indices = np.argpartition(sims, -k)[-k:]
+            top_k_sims = np.sort(sims[top_k_indices])[::-1]
+
+            # Linear decay weighting: 1.0 down to 0.60
+            weights = np.linspace(1.0, 0.60, k)
+            weighted_score = float(np.dot(top_k_sims, weights) / np.sum(weights))
+            results.append((name, weighted_score))
+
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results
+
+    def get_matching_diseases(self, img, threshold=0.30, max_matches=3):
         """
         Returns list of diseases that crossed a minimum confidence bar.
         """
-        similarities = self.compare_image(img) # Perform the full database comparison
-        matches = [(d, s) for d, s in similarities if s >= threshold] # Filter out results below the confidence threshold
-        return matches[:max_matches] # Return only the requested number of top matches
+        similarities = self.compare_image(img)
+        matches = [(d, s) for d, s in similarities if s >= threshold]
+        return matches[:max_matches]
 
-    def get_stats(self): # Data audit | CHANGE: Add 'Last Modified' date for each dataset
+    def get_stats(self):
         """
-        Returns summary of images loaded per disease category.
+        Returns summary of image counts per disease category.
         """
-        stats = {} # Initialize results dictionary
-        for disease, flist in self.reference_images.items(): # Iterate through disease groups
-            stats[disease] = len(flist) # Store the number of image fingerprints per group
-        return stats # Return the final statistics report
+        return self.counts

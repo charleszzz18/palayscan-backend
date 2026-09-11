@@ -4,8 +4,9 @@ import numpy as np # Import Numpy for numerical array operations
 import cv2 # Import OpenCV for image processing
 import json # Import JSON for index mapping
 
-MODEL_PATH = "rice_model.h5" # Define the path to the pre-trained model file
-CLASS_INDICES_PATH = "class_indices.json" # Define the path to the class index mapping file
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(_BASE_DIR, "rice_model.h5")
+CLASS_INDICES_PATH = os.path.join(_BASE_DIR, "class_indices.json")
 
 _model = None # Initialize model variable as None (Lazy Loading)
 _class_labels = None # Initialize class labels variable as None
@@ -69,21 +70,26 @@ def analyze_with_dl(img, return_all_preds=False): # Primary function for Deep Le
         return (None, 0.0, {}) if return_all_preds else (None, 0.0)
         
     try: # Start inference error handling
-        # 1. Preserve aspect ratio by center-cropping elongated phone images to square
+        # 1. Aspect-ratio preserving letterbox padding (preserves lesions at leaf tips/borders)
         h, w = img.shape[:2]
-        if abs(h - w) > min(h, w) * 0.15:
-            min_dim = min(h, w)
-            cy, cx = h // 2, w // 2
-            img_square = img[cy - min_dim//2 : cy + min_dim//2, cx - min_dim//2 : cx + min_dim//2]
-        else:
-            img_square = img
+        target_size = 224
+        scale = target_size / max(h, w)
+        new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
+        resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        
+        pad_top = (target_size - new_h) // 2
+        pad_bottom = target_size - new_h - pad_top
+        pad_left = (target_size - new_w) // 2
+        pad_right = target_size - new_w - pad_left
+        
+        # Use border reflection to prevent artificial dark edges from confusing CNN features
+        padded = cv2.copyMakeBorder(resized, pad_top, pad_bottom, pad_left, pad_right, cv2.BORDER_REFLECT_101)
 
-        # 2. Convert to RGB and resize to 224x224
-        img_rgb = cv2.cvtColor(img_square, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img_rgb, (224, 224), interpolation=cv2.INTER_AREA)
+        # 2. Convert to RGB
+        img_rgb = cv2.cvtColor(padded, cv2.COLOR_BGR2RGB)
         
         # 3. Expand dims to create batch: shape (1, 224, 224, 3)
-        img_array = np.expand_dims(img_resized, axis=0).astype('float32') / 255.0
+        img_array = np.expand_dims(img_rgb, axis=0).astype('float32') / 255.0
         
         # 4. Predict using fast direct model call
         predictions = _model(img_array, training=False).numpy()[0]
