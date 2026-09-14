@@ -125,6 +125,24 @@ def serve_upload(filename):
     """Serves uploaded leaf photos stored in WAMP backend directory."""
     return send_from_directory(uploads_dir, filename)
 
+@app.route("/reference-image/<disease>")
+def serve_reference_image(disease):
+    """Serves a clear reference comparison photograph from the dataset for a given rice disease."""
+    dataset_base = os.path.join(backend_dir, 'dataset', 'Rice Disease')
+    target_dir = os.path.join(dataset_base, disease)
+    if not os.path.exists(target_dir):
+        for d in os.listdir(dataset_base):
+            if d.lower() == disease.lower():
+                target_dir = os.path.join(dataset_base, d)
+                break
+    if os.path.exists(target_dir):
+        files = [f for f in sorted(os.listdir(target_dir)) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+        if files:
+            # Pick a clear representative photo from the folder
+            idx = min(len(files) // 2, len(files) - 1)
+            return send_from_directory(target_dir, files[idx])
+    return jsonify({"error": "No reference image found"}), 404
+
 
 # --- 4. SECURE USER ACCOUNT ROUTING (AUTHENTICATION) ---
 
@@ -329,6 +347,9 @@ DISEASE_DIAGNOSTIC_EXPLANATIONS = {
     "Brown Spot": {
         "name": "Brown Spot",
         "name_tl": "Brown Spot (Mantsang Kayumanggi)",
+        "lesion_color": "Reddish-Brown with Yellow Halo",
+        "lesion_color_tl": "Mamula-mulang Kayumanggi na may Dilaw na Paligid",
+        "color_hex": ["#78350f", "#ca8a04"],
         "symptom": "Circular to oval reddish-brown lesions with gray necrotic centers and yellow chlorotic halos.",
         "symptom_tl": "Maliliit na bilog o pahabang kayumangging patse na may abuhing gitna at madilaw na paligid sa dahon.",
         "why_detected": "The leaf blade exhibits discrete circular/oval brown spots with necrotic centers, characteristic of Bipolaris oryzae fungal infection."
@@ -336,6 +357,9 @@ DISEASE_DIAGNOSTIC_EXPLANATIONS = {
     "Blast": {
         "name": "Rice Blast",
         "name_tl": "Rice Blast (Pumutok/Dahon Blast)",
+        "lesion_color": "Grayish-White with Dark Brown Margin",
+        "lesion_color_tl": "Abuhing Puti na may Maitim na Kayumangging Gilid",
+        "color_hex": ["#94a3b8", "#78350f"],
         "symptom": "Spindle-shaped or diamond-shaped lesions with pointed ends, gray-whitish centers, and dark brown margins.",
         "symptom_tl": "Hugis-brilyanteng mga sugat na may matulis na dulo, abuhing gitna, at maitim na kayumangging gilid.",
         "why_detected": "Diamond- or spindle-shaped lesions observed across the leaf blade, characteristic of Pyricularia oryzae fungal blast."
@@ -343,6 +367,9 @@ DISEASE_DIAGNOSTIC_EXPLANATIONS = {
     "Blight": {
         "name": "Bacterial Leaf Blight",
         "name_tl": "Bacterial Leaf Blight (Bacterial Hawas)",
+        "lesion_color": "Straw-Yellow to Bleached Wavy White",
+        "lesion_color_tl": "Madilaw na Dayami hanggang Maputing Guhit",
+        "color_hex": ["#eab308", "#fef08a"],
         "symptom": "Water-soaked stripes starting from leaf tips and margins, rapidly turning wavy yellowish-white or straw-colored.",
         "symptom_tl": "Parang basang mga guhit mula sa dulo at gilid ng dahon na nagiging madilaw hanggang mapuputi.",
         "why_detected": "Marginal chlorotic and wavy lesions progressing inward along veins from the leaf margin, indicative of Xanthomonas oryzae."
@@ -350,6 +377,9 @@ DISEASE_DIAGNOSTIC_EXPLANATIONS = {
     "Leaf Strip": {
         "name": "Bacterial Leaf Streak",
         "name_tl": "Bacterial Leaf Streak (Leaf Strip)",
+        "lesion_color": "Narrow Yellowish-Brown Streaks",
+        "lesion_color_tl": "Maninipis na Dilaw-Kayumangging Guhit",
+        "color_hex": ["#b45309", "#d97706"],
         "symptom": "Narrow, interveinal linear streaks between leaf veins that turn yellowish-brown.",
         "symptom_tl": "Maninipis na linyang sugat sa pagitan ng mga ugat ng dahon na nagiging kulay kayumanggi.",
         "why_detected": "Linear lesion streaks restricted between leaf veins with translucent or yellowish-brown appearance."
@@ -357,6 +387,9 @@ DISEASE_DIAGNOSTIC_EXPLANATIONS = {
     "Rust": {
         "name": "Leaf Rust",
         "name_tl": "Leaf Rust (Kalawang sa Dahon)",
+        "lesion_color": "Powdery Orange-Red Pustules",
+        "lesion_color_tl": "Parang Pulbos na Kahel-Pula",
+        "color_hex": ["#ea580c", "#c2410c"],
         "symptom": "Small, powdery orange-brown pustules scattered across the leaf blade.",
         "symptom_tl": "Maliliit at parang pulbos na mamula-mulang kayumangging bukol sa ibabaw ng dahon.",
         "why_detected": "Powdery reddish-orange pustules observed erupting across the leaf surface."
@@ -364,11 +397,156 @@ DISEASE_DIAGNOSTIC_EXPLANATIONS = {
     "Healthy": {
         "name": "Healthy",
         "name_tl": "Malusog na Palay",
+        "lesion_color": "Vibrant Clean Green (No Lesions)",
+        "lesion_color_tl": "Matingkad na Luntian (Walang Sugat)",
+        "color_hex": ["#22c55e", "#16a34a"],
         "symptom": "Uniform green leaf tissue with no necrotic lesions or pathogen spots.",
         "symptom_tl": "Matingkad na luntiang dahon nang walang anumang sugat o bakas ng peste.",
         "why_detected": "No significant necrotic or fungal discoloration detected on the leaf surface."
     }
 }
+
+
+def has_visual_evidence_for_disease(disease_name, tex_metrics):
+    """
+    Validates whether the leaf actually possesses the physical morphological and color 
+    characteristics of the candidate disease.
+    If the leaf tissue does not exhibit these characteristics, the disease CANNOT be
+    pinpointed in the Diagnostic Visualization and must be completely rejected from
+    secondary considerations.
+    """
+    if not disease_name or disease_name == "Healthy" or not tex_metrics:
+        return False
+        
+    brown_ratio   = tex_metrics.get('brown_ratio', 0.0)
+    straw_ratio   = tex_metrics.get('straw_ratio', 0.0)
+    white_ratio   = tex_metrics.get('white_ratio', 0.0)
+    yellow_ratio  = tex_metrics.get('yellow_ratio', 0.0)
+    orange_ratio  = tex_metrics.get('orange_ratio', 0.0)
+    gray_ratio    = tex_metrics.get('gray_ratio', 0.0)
+    num_streaks   = tex_metrics.get('num_streaks', 0)
+    max_streak_ar = tex_metrics.get('max_streak_ar', 1.0)
+    straw_white_ratio = straw_ratio + white_ratio
+
+    if disease_name == "Blight":
+        # Blight requires distinct straw-yellow to bleached lesions along leaf margins/veins
+        return (straw_white_ratio >= 0.030 or (straw_white_ratio >= 0.018 and yellow_ratio >= 0.12) or (yellow_ratio >= 0.18 and max_streak_ar >= 2.5))
+        
+    elif disease_name == "Brown Spot":
+        # Brown Spot requires reddish-brown circular/oval spots or orange halo necrosis
+        return (brown_ratio >= 0.022 or (brown_ratio >= 0.014 and orange_ratio >= 0.010) or orange_ratio >= 0.030)
+        
+    elif disease_name == "Blast":
+        # Blast requires necrotic lesions with grayish centers and brown borders
+        return (gray_ratio >= 0.003 and (brown_ratio >= 0.012 or straw_white_ratio >= 0.018))
+        
+    elif disease_name == "Leaf Strip":
+        # Leaf Strip requires narrow linear interveinal streaks
+        return (num_streaks >= 6 and max_streak_ar >= 6.0)
+        
+    elif disease_name == "Rust":
+        # Rust requires powdery orange-red/brown pustules
+        return (orange_ratio >= 0.035 or (orange_ratio >= 0.018 and brown_ratio >= 0.018))
+
+    return False
+
+
+def assign_hotspots_to_candidates(hotspots, primary_disease, visual_matches, diag_explanations, tex_metrics=None):
+    """
+    Enriches each lesion hotspot with disease-specific attribution.
+    Only secondary candidate diseases that have genuine, verified physical evidence
+    on the leaf can receive a pinpoint in the Diagnostic Visualization.
+    If a secondary candidate has NO visual evidence on the leaf, it is rejected
+    and receives NO pinpoint.
+    """
+    if not hotspots or not primary_disease or primary_disease == "Healthy":
+        return []
+
+    # Find secondary candidate diseases with meaningful probability (>= 15%)
+    # that PASS physical visual evidence validation on this leaf
+    secondary_candidates = []
+    if visual_matches and len(hotspots) > 1:
+        for m in visual_matches:
+            name = m.get("name")
+            try:
+                sim = float(m.get("similarity", 0))
+            except (ValueError, TypeError):
+                sim = 0.0
+            if name and name != primary_disease and name != "Healthy" and sim >= 0.15 and name in diag_explanations:
+                # Strictly require physical visual evidence for this disease on the leaf
+                if tex_metrics is None or has_visual_evidence_for_disease(name, tex_metrics):
+                    secondary_candidates.append({
+                        "name": name,
+                        "sim": sim,
+                        "prob_pct": int(round(sim * 100))
+                    })
+
+    primary_info = diag_explanations.get(primary_disease, {})
+    primary_colors = primary_info.get("color_hex", ["#ef4444", "#dc2626"])
+
+    # If there are no secondary candidates, all hotspots represent the primary diagnosis
+    if not secondary_candidates:
+        for h in hotspots:
+            h.update({
+                "disease": primary_disease,
+                "disease_tl": primary_info.get("name_tl", primary_disease),
+                "probability": "Primary Diagnosis",
+                "is_primary": True,
+                "lesion_color": primary_info.get("lesion_color", ""),
+                "color_hex": primary_colors,
+                "pin_color": primary_colors[0],
+                "why": primary_info.get("why_detected", ""),
+                "symptom": primary_info.get("symptom", "")
+            })
+        return hotspots
+
+    # Assign secondary candidate(s) to smaller/subsequent lesion hotspots
+    num_spots = len(hotspots)
+    assigned_secondary = {} # index -> candidate dict
+
+    for cand in secondary_candidates:
+        available_indices = [i for i in range(num_spots) if i not in assigned_secondary]
+        # Keep index 0 for the primary disease's largest lesion
+        if len(available_indices) > 1:
+            target_idx = available_indices[-1] # pick a secondary spot
+        elif available_indices:
+            target_idx = available_indices[0]
+        else:
+            break
+        assigned_secondary[target_idx] = cand
+
+    for idx, h in enumerate(hotspots):
+        if idx in assigned_secondary:
+            cand = assigned_secondary[idx]
+            c_name = cand["name"]
+            c_info = diag_explanations.get(c_name, {})
+            c_colors = c_info.get("color_hex", ["#78350f", "#ca8a04"])
+            h.update({
+                "disease": c_name,
+                "disease_tl": c_info.get("name_tl", c_name),
+                "probability": f"{cand['prob_pct']}% Probability Consideration",
+                "is_primary": False,
+                "lesion_color": c_info.get("lesion_color", ""),
+                "color_hex": c_colors,
+                "pin_color": c_colors[0],
+                "why": f"Evaluated by model with {cand['prob_pct']}% probability as a potential {c_name} lesion.",
+                "symptom": c_info.get("symptom", "")
+            })
+        else:
+            h.update({
+                "disease": primary_disease,
+                "disease_tl": primary_info.get("name_tl", primary_disease),
+                "probability": "Primary Diagnosis",
+                "is_primary": True,
+                "lesion_color": primary_info.get("lesion_color", ""),
+                "color_hex": primary_colors,
+                "pin_color": primary_colors[0],
+                "why": primary_info.get("why_detected", ""),
+                "symptom": primary_info.get("symptom", "")
+            })
+
+    return hotspots
+
 
 def analyze_rice_health(img, weather_condition="hot"):
     """
@@ -457,19 +635,40 @@ def analyze_rice_health(img, weather_condition="hot"):
     # MobileNetV2 has < 100 clump photos for Leaf Strip and zero single-leaf macro training shots,
     # causing it to misclassify close-up Leaf Strip as Blight, Blast, or Healthy.
     is_leaf_strip = False
+    # Only consider disease overrides if the leaf is NOT overwhelmingly confirmed healthy by DL, color, and lack of necrosis
+    straw_white_ratio = straw_ratio + white_ratio
+    is_confidently_healthy = (dl_disease == "Healthy" and dl_confidence >= 0.70 and health_score >= 0.85 and straw_white_ratio < 0.02 and brown_ratio < 0.02)
+
     leaf_strip_sim = next((s for d, s in visual_matches if d == "Leaf Strip"), 0.0)
-    if top_visual_disease == "Leaf Strip" and top_visual_score >= 0.75:
-        if dl_disease == "Blast" and dl_confidence >= 0.90:
-            if num_streaks >= 10 or max_streak_ar >= 16.0:
+    if not is_confidently_healthy:
+        if top_visual_disease == "Leaf Strip" and top_visual_score >= 0.75:
+            if dl_disease == "Blast" and dl_confidence >= 0.90:
+                if num_streaks >= 10 or max_streak_ar >= 16.0:
+                    is_leaf_strip = True
+            else:
                 is_leaf_strip = True
-        else:
+        elif leaf_strip_sim >= 0.75 and dl_disease == "Blight":
             is_leaf_strip = True
-    elif leaf_strip_sim >= 0.75 and dl_disease == "Blight":
-        is_leaf_strip = True
-    elif num_streaks >= 12 and max_streak_ar >= 10.0:
-        # Interveinal linear streaks between veins (neither Blight nor Brown Spot forms > 10 narrow streaks)
-        if not (dl_disease == top_visual_disease and dl_confidence >= 0.60):
-            is_leaf_strip = True
+        elif num_streaks >= 12 and max_streak_ar >= 10.0:
+            # Interveinal linear streaks between veins (neither Blight nor Brown Spot forms > 10 narrow streaks)
+            if not (dl_disease == top_visual_disease and dl_confidence >= 0.60):
+                is_leaf_strip = True
+
+    # Check for Bacterial Leaf Blight (Blight) cross-validation safeguard:
+    # DL often misclassifies images with panicles/screens or whole clumps as Brown Spot,
+    # even when the leaf exhibits continuous longitudinal straw/bleached blighted bands and the 13,480-image dataset comparator identifies Blight as #1!
+    is_blight = False
+    blight_sim = next((s for d, s in visual_matches if d == "Blight"), 0.0)
+
+    if not is_leaf_strip and not is_confidently_healthy:
+        if top_visual_disease == "Blight" and top_visual_score >= 0.78:
+            if straw_white_ratio >= 0.035 or (straw_white_ratio >= 0.025 and max_streak_ar >= 3.5) or ("Blight" in texture_diseases and straw_white_ratio >= 0.02):
+                is_blight = True
+        elif blight_sim >= 0.82 and straw_white_ratio >= 0.04 and max_streak_ar >= 3.5:
+            if dl_disease in ["Brown Spot", "Blast"]:
+                is_blight = True
+        elif "Blight" in texture_diseases and blight_sim >= 0.75 and straw_white_ratio >= 0.03 and dl_disease != top_visual_disease:
+            is_blight = True
 
     if is_leaf_strip:
         confirmed_diseases.append("Leaf Strip")
@@ -480,49 +679,82 @@ def analyze_rice_health(img, weather_condition="hot"):
             visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
             if dl_confidence >= 0.40 and dl_disease not in possible_diseases:
                 possible_diseases.append(dl_disease)
+    elif is_blight:
+        confirmed_diseases.append("Blight")
+        possible_diseases.append("Blight")
+        conf_score = max(blight_sim if blight_sim >= 0.75 else 0.88, 0.86)
+        visual_matches_formatted.append({"name": "Blight", "similarity": f"{conf_score:.2f}"})
+        if dl_disease and dl_disease != "Blight" and dl_disease != "Healthy":
+            if has_visual_evidence_for_disease(dl_disease, tex_metrics):
+                visual_matches_formatted.append({"name": dl_disease, "similarity": f"{min(dl_confidence, 0.35):.2f}"})
+                if dl_confidence >= 0.50 and dl_disease not in possible_diseases:
+                    possible_diseases.append(dl_disease)
     # 1. High Confidence Deep Learning: Decisive diagnosis without confusing fingerprint noise
     elif dl_disease and dl_confidence >= 0.65:
-        confirmed_diseases.append(dl_disease)
-        possible_diseases.append(dl_disease)
-        visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
-        # Add secondary candidate only if DL itself detected a substantial second probability (> 20%)
-        for name, conf in sorted(dl_all_preds.items(), key=lambda x: x[1], reverse=True):
-            if name != dl_disease and name in SUPPORTED_DISEASES and conf >= 0.20 and name != "Healthy":
-                visual_matches_formatted.append({"name": name, "similarity": f"{conf:.2f}"})
-                if name not in possible_diseases:
-                    possible_diseases.append(name)
-    elif dl_disease and dl_confidence >= 0.40:
-        # Moderate confidence: cross-reference with top fingerprint match
-        if dl_disease == top_visual_disease:
+        # Safeguard: If DL guessed Brown Spot, but leaf has elongated bleached stripes with high Blight dataset similarity:
+        if dl_disease == "Brown Spot" and top_visual_disease == "Blight" and top_visual_score >= 0.78 and straw_white_ratio >= 0.035:
+            confirmed_diseases.append("Blight")
+            possible_diseases.append("Blight")
+            visual_matches_formatted.append({"name": "Blight", "similarity": f"{top_visual_score:.2f}"})
+            if has_visual_evidence_for_disease("Brown Spot", tex_metrics):
+                visual_matches_formatted.append({"name": "Brown Spot", "similarity": f"{min(dl_confidence, 0.35):.2f}"})
+        else:
             confirmed_diseases.append(dl_disease)
             possible_diseases.append(dl_disease)
+            visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
+            # Add secondary candidate only if DL itself detected a substantial second probability (> 20%)
+            for name, conf in sorted(dl_all_preds.items(), key=lambda x: x[1], reverse=True):
+                if name != dl_disease and name in SUPPORTED_DISEASES and conf >= 0.20 and name != "Healthy":
+                    if has_visual_evidence_for_disease(name, tex_metrics):
+                        visual_matches_formatted.append({"name": name, "similarity": f"{conf:.2f}"})
+                        if name not in possible_diseases:
+                            possible_diseases.append(name)
+    elif dl_disease and dl_confidence >= 0.40:
+        # Moderate confidence: cross-reference with top fingerprint match
+        if dl_disease == "Brown Spot" and top_visual_disease == "Blight" and top_visual_score >= 0.75 and straw_white_ratio >= 0.035:
+            confirmed_diseases.append("Blight")
+            possible_diseases.append("Blight")
+            visual_matches_formatted.append({"name": "Blight", "similarity": f"{top_visual_score:.2f}"})
+            if has_visual_evidence_for_disease("Brown Spot", tex_metrics):
+                visual_matches_formatted.append({"name": "Brown Spot", "similarity": f"{min(dl_confidence, 0.35):.2f}"})
+        elif dl_disease == top_visual_disease:
+            confirmed_diseases.append(dl_disease)
+            possible_diseases.append(dl_disease)
+            visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
         elif top_visual_disease and top_visual_score >= 0.60:
             confirmed_diseases.append(top_visual_disease)
             possible_diseases.append(top_visual_disease)
             if dl_disease not in possible_diseases:
                 possible_diseases.append(dl_disease)
+            visual_matches_formatted.append({"name": top_visual_disease, "similarity": f"{top_visual_score:.2f}"})
+            if has_visual_evidence_for_disease(dl_disease, tex_metrics):
+                visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
         elif dl_confidence >= 0.50:
             confirmed_diseases.append(dl_disease)
             possible_diseases.append(dl_disease)
+            visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
         else:
             possible_diseases.append(dl_disease)
             if top_visual_disease and top_visual_disease not in possible_diseases:
                 possible_diseases.append(top_visual_disease)
+            visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
                 
-        visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
         # Use DL model probabilities for secondary candidates so all match percentages use the exact same scale
         for name, conf in sorted(dl_all_preds.items(), key=lambda x: x[1], reverse=True):
             if name != dl_disease and name in SUPPORTED_DISEASES and conf >= 0.15 and name != "Healthy":
-                visual_matches_formatted.append({"name": name, "similarity": f"{conf:.2f}"})
-                if name not in possible_diseases and conf >= 0.25:
-                    possible_diseases.append(name)
+                if has_visual_evidence_for_disease(name, tex_metrics):
+                    if not any(m["name"] == name for m in visual_matches_formatted):
+                        visual_matches_formatted.append({"name": name, "similarity": f"{conf:.2f}"})
+                    if name not in possible_diseases and conf >= 0.25:
+                        possible_diseases.append(name)
     elif top_visual_disease and top_visual_score >= 0.45:
         # Fallback to visual fingerprints if DL is uncertain
         possible_diseases.append(top_visual_disease)
         if top_visual_score >= 0.60:
             confirmed_diseases.append(top_visual_disease)
         for name, score in visual_matches:
-            visual_matches_formatted.append({"name": name, "similarity": f"{score:.2f}"})
+            if name == top_visual_disease or has_visual_evidence_for_disease(name, tex_metrics):
+                visual_matches_formatted.append({"name": name, "similarity": f"{score:.2f}"})
 
     # Filter according to weather context
     possible_diseases = filter_diseases_by_weather(possible_diseases, weather_condition)
@@ -574,6 +806,33 @@ def analyze_rice_health(img, weather_condition="hot"):
 
     diag_info = DISEASE_DIAGNOSTIC_EXPLANATIONS.get(primary_disease, DISEASE_DIAGNOSTIC_EXPLANATIONS.get("Healthy", {}))
 
+    # Enrich lesion hotspots with disease-specific attribution & secondary candidate pinpoints
+    enriched_hotspots = assign_hotspots_to_candidates(
+        lesion_hotspots,
+        primary_disease,
+        visual_matches_formatted,
+        DISEASE_DIAGNOSTIC_EXPLANATIONS,
+        tex_metrics
+    ) if not is_healthy else []
+
+    # STRICT HARMONIZATION WITH DIAGNOSTIC VISUALIZATION:
+    # If a secondary disease does NOT have an active pinpoint in the Diagnostic Visualization,
+    # it is rejected (meaning its probability is invalid) and MUST NOT appear in visual_matches
+    # (Secondary Model Considerations) or possible_diseases!
+    pinpointed_diseases = set(h["disease"] for h in enriched_hotspots if h.get("disease")) if enriched_hotspots else {primary_disease}
+    visual_matches_formatted = [
+        m for m in visual_matches_formatted 
+        if m["name"] == primary_disease or m["name"] in pinpointed_diseases
+    ]
+    possible_diseases = [
+        d for d in possible_diseases 
+        if d == primary_disease or d in pinpointed_diseases
+    ]
+    confirmed_diseases = [
+        d for d in confirmed_diseases 
+        if d == primary_disease or d in pinpointed_diseases
+    ]
+
     return {
         "health_score":       float(health_score),
         "is_healthy":         is_healthy,
@@ -582,9 +841,13 @@ def analyze_rice_health(img, weather_condition="hot"):
         "disease_symptom":    diag_info.get("symptom", ""),
         "disease_symptom_tl": diag_info.get("symptom_tl", ""),
         "why_detected":       diag_info.get("why_detected", ""),
+        "lesion_color":       diag_info.get("lesion_color", ""),
+        "lesion_color_tl":    diag_info.get("lesion_color_tl", ""),
+        "color_hex":          diag_info.get("color_hex", ["#ef4444"]),
+        "reference_image_url": f"/reference-image/{primary_disease}" if not is_healthy and primary_disease != "Healthy" else None,
         "infected_area_pct":  infected_area_pct,
         "severity_label":     severity_label,
-        "lesion_hotspots":    lesion_hotspots if not is_healthy else [],
+        "lesion_hotspots":    enriched_hotspots,
         "diseases":           possible_diseases if possible_diseases else None,
         "confirmed_diseases": confirmed_diseases if confirmed_diseases else None,
         "visual_matches":     visual_matches_formatted if visual_matches_formatted else None,

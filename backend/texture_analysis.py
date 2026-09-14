@@ -99,8 +99,10 @@ def analyze_texture(img, sensitivity=1.0, return_metrics=False): # Texture analy
     if brown_ratio > 0.05 and edge_density > 0.10:
         possible_diseases.append("Leaf Strip")
 
-    # RULE: Blight (Streaks - white/straw + high texture)
-    if edge_density > 0.10 and (straw_ratio > 0.05 or white_ratio > 0.05):
+    # RULE: Blight (Streaks - white/straw bleached necrosis along leaf blade)
+    if (straw_ratio > 0.04 or white_ratio > 0.03 or (straw_ratio + white_ratio > 0.055)) and edge_density > 0.035:
+        possible_diseases.append("Blight")
+    elif edge_density > 0.10 and (straw_ratio > 0.05 or white_ratio > 0.05):
         possible_diseases.append("Blight")
     
     # RULE: Blast (Brown borders with gray centers)

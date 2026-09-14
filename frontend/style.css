@@ -669,6 +669,63 @@ main {
     margin: 4px 0 0 0;
 }
 
+.diag-pin-indicators {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.pin-indicator-title {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.pin-indicator-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #1e293b;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.pin-indicator-tag.primary {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e40af;
+}
+
+.pin-indicator-tag.secondary {
+    background: #fefce8;
+    border-color: #fde047;
+    color: #854d0e;
+}
+
+.ind-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.25);
+    border: 1.5px solid #ffffff;
+    flex-shrink: 0;
+}
+
+.ind-prob {
+    font-size: 0.74rem;
+    opacity: 0.85;
+    font-weight: 600;
+}
+
 .image-toggle-controls {
     display: inline-flex;
     background: #e2e8f0;
@@ -703,14 +760,18 @@ main {
     border-radius: 16px;
     overflow: hidden;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
-    background: #000;
+    background: transparent;
+    line-height: normal;
 }
 
 .interactive-scan-wrapper img.highlight-img {
     display: block;
-    width: 100%;
+    max-width: 100%;
     max-height: 520px;
-    object-fit: contain;
+    width: auto;
+    height: auto;
+    margin: 0 auto;
+    border-radius: 16px;
     transition: opacity 0.3s ease;
     user-select: none;
 }
@@ -721,72 +782,175 @@ main {
     pointer-events: auto;
 }
 
-/* Lesion Hotspot Pins */
+/* Number-Free Teardrop Lesion Hotspot Pins Directly on Red Mask */
 .lesion-hotspot-pin {
     position: absolute;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -100%);
+    width: 28px;
+    height: 36px;
     cursor: pointer;
-    z-index: 10;
+    z-index: 30;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    transition: transform 0.2s ease;
+    justify-content: flex-start;
+    transition: transform 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.2s ease;
+    pointer-events: auto;
+    touch-action: manipulation;
+    user-select: none;
 }
 
 .lesion-hotspot-pin:hover,
 .lesion-hotspot-pin.active {
-    transform: translate(-50%, -50%) scale(1.3);
+    transform: translate(-50%, -108%) scale(1.25);
+    z-index: 45;
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.5));
 }
 
-.pin-ring {
-    position: absolute;
+.pin-marker-graphic {
+    display: block;
+    width: 28px;
+    height: 36px;
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.38));
+}
+
+.pin-svg {
+    display: block;
     width: 100%;
     height: 100%;
-    min-width: 24px;
-    min-height: 24px;
-    border: 2px solid #ef4444;
-    background: rgba(239, 68, 68, 0.28);
-    border-radius: 50%;
-    animation: lesionPulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+    overflow: visible;
 }
 
-.pin-dot {
-    width: 8px;
-    height: 8px;
-    background: #ff0000;
-    border: 2px solid #ffffff;
+.pin-pulse-ring {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    transform: translate(-50%, -50%);
+    width: 22px;
+    height: 22px;
+    border: 2px solid #ef4444;
+    background: rgba(239, 68, 68, 0.35);
     border-radius: 50%;
-    box-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
+    animation: lesionPulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+    pointer-events: none;
+}
+
+.pin-target-dot {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background: #ffffff;
+    border: 1.5px solid #ef4444;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(255, 0, 0, 0.95);
+    pointer-events: none;
 }
 
 @keyframes lesionPulse {
     0%, 100% {
-        transform: scale(1);
+        transform: translate(-50%, -50%) scale(0.9);
         opacity: 0.95;
     }
     50% {
-        transform: scale(1.7);
-        opacity: 0.25;
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 0.2;
     }
 }
 
-/* Floating Inspection Tooltip / Popover */
+/* Diagnostic Disease Reference Strip (Lesion Color Swatch & Comparison Photo) */
+.diag-reference-strip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+    padding: 12px 16px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    text-align: left;
+}
+
+.ref-strip-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    flex: 1 1 230px;
+    max-width: 420px;
+}
+
+.ref-strip-swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
+
+.ref-strip-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.ref-strip-label {
+    font-size: 0.72rem;
+    color: #64748b;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+}
+
+.ref-strip-val {
+    font-size: 0.88rem;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+/* Floating Disease Inspection Popover (Clean, Legible, No Reference Image) */
 .lesion-popover {
     position: absolute;
-    z-index: 25;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    z-index: 60;
+    background: rgba(15, 23, 42, 0.96);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     color: #ffffff;
     border-radius: 14px;
-    padding: 16px 20px;
+    padding: 16px 18px;
     width: 290px;
-    max-width: 88vw;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    max-width: calc(100% - 24px);
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+    line-height: 1.5;
+    font-size: 0.9rem;
+    box-shadow: 0 20px 30px -5px rgba(0, 0, 0, 0.65), 0 8px 12px -6px rgba(0, 0, 0, 0.45);
     border: 1px solid rgba(255, 255, 255, 0.18);
     text-align: left;
     pointer-events: auto;
+    top: 16px;
+    right: 16px;
+    transition: left 0.15s ease, top 0.15s ease, opacity 0.2s ease;
     animation: popoverFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lesion-popover::-webkit-scrollbar {
+    width: 4px;
+}
+.lesion-popover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
 }
 
 @keyframes popoverFadeIn {
@@ -803,16 +967,70 @@ main {
 .popover-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.popover-tag {
-    font-size: 0.75rem;
+.popover-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1;
+}
+
+.popover-icon {
+    font-size: 1.2rem;
+    line-height: 1.2;
+}
+
+.popover-title-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.popover-disease {
+    margin: 0;
+    font-size: 1.15rem;
     font-weight: 700;
+    color: #ffffff;
+    line-height: 1.25;
+    letter-spacing: -0.2px;
+}
+
+.popover-disease-tl {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    line-height: 1.3;
+    display: block;
+}
+
+.badge-prob-primary {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: #3b82f6;
+    color: #ffffff;
+    letter-spacing: 0.3px;
     text-transform: uppercase;
-    color: #f87171;
-    letter-spacing: 0.5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.badge-prob-secondary {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: #d97706;
+    color: #ffffff;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .popover-close-btn {
@@ -823,43 +1041,86 @@ main {
     cursor: pointer;
     line-height: 1;
     padding: 0 4px;
+    transition: color 0.2s ease;
 }
 .popover-close-btn:hover {
     color: #ffffff;
 }
 
-.popover-disease {
-    margin: 0 0 6px 0;
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: #ffffff;
+/* Disease Lesion Color Badge */
+.popover-color-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    padding: 10px 14px;
+    border-radius: 10px;
+    margin-bottom: 12px;
 }
 
-.popover-why {
+.color-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.35);
+    flex-shrink: 0;
+}
+
+.color-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.color-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    color: #94a3b8;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.color-name {
     font-size: 0.88rem;
-    line-height: 1.45;
-    color: #cbd5e1;
-    margin: 0 0 10px 0;
-}
-
-.popover-why strong {
-    color: #fca5a5;
+    color: #ffffff;
+    font-weight: 700;
+    line-height: 1.35;
 }
 
 .popover-specs {
     font-size: 0.82rem;
-    color: #94a3b8;
+    color: #cbd5e1;
+    line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.popover-why {
+    margin: 0;
+    color: #e2e8f0;
     line-height: 1.4;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding-top: 8px;
-    margin-bottom: 12px;
+}
+.popover-why strong {
+    color: #fca5a5;
+}
+
+.popover-signs {
+    margin: 0;
+    color: #cbd5e1;
+    line-height: 1.4;
 }
 
 .popover-damage {
     display: block;
     color: #f87171;
     font-weight: 600;
-    margin-top: 4px;
+    margin: 0;
+    line-height: 1.4;
 }
 
 .popover-footer a.popover-link-btn {
@@ -894,6 +1155,24 @@ main {
 
     .score-value {
         font-size: 32px;
+    }
+
+    .interactive-scan-wrapper img.highlight-img {
+        max-height: 440px;
+    }
+
+    .lesion-popover {
+        width: calc(100% - 16px) !important;
+        max-width: calc(100% - 16px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        bottom: 8px !important;
+        top: auto !important;
+        max-height: 250px !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding: 12px 14px;
+        border-radius: 12px;
     }
 }
 

@@ -149,10 +149,11 @@ def analyze_color(img): # Main color engine | CHANGE: Add 'sensitivity' paramete
     return health_score, final_healthy_mask, final_infected_mask, growth_stage, None # Return all calculated results to main app
 
 
-def extract_lesion_hotspots(infected_mask, max_spots=8):
+def extract_lesion_hotspots(infected_mask, max_spots=5):
     """
     Finds prominent lesion contours in the infected mask and computes
-    normalized percentage coordinates (x%, y%, w%, h%) for interactive UI hotspots.
+    normalized percentage coordinates (x%, y%, w%, h%) guaranteed to land
+    directly inside the red highlighted lesion area using distance transforms.
     """
     if infected_mask is None:
         return []
@@ -163,8 +164,10 @@ def extract_lesion_hotspots(infected_mask, max_spots=8):
         return []
         
     contours, _ = cv2.findContours(infected_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    min_area = max(10, int(total_pixels * 0.0001)) # Filter out tiny single-pixel noise
+    min_area = max(8, int(total_pixels * 0.0001)) # Filter out tiny single-pixel noise
     valid_contours = [c for c in contours if cv2.contourArea(c) >= min_area]
+    if not valid_contours and len(contours) > 0:
+        valid_contours = contours
     
     # Sort largest lesion clusters first
     valid_contours.sort(key=lambda c: cv2.contourArea(c), reverse=True)
@@ -172,15 +175,25 @@ def extract_lesion_hotspots(infected_mask, max_spots=8):
     hotspots = []
     for idx, cnt in enumerate(valid_contours[:max_spots]):
         x, y, w, h = cv2.boundingRect(cnt)
-        center_x = round(((x + w / 2.0) / float(width)) * 100, 1)
-        center_y = round(((y + h / 2.0) / float(height)) * 100, 1)
+        c_mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.drawContours(c_mask, [cnt], -1, 255, -1, offset=(-x, -y))
+        dist_map = cv2.distanceTransform(c_mask, cv2.DIST_L2, 3)
+        _, _, _, max_loc = cv2.minMaxLoc(dist_map)
+        
+        # Exact lesion coordinate guaranteed to be directly on the red highlighted pixels
+        best_x = x + max_loc[0]
+        best_y = y + max_loc[1]
+        
+        center_x = round((float(best_x) / float(width)) * 100, 1)
+        center_y = round((float(best_y) / float(height)) * 100, 1)
         w_pct = round((w / float(width)) * 100, 1)
         h_pct = round((h / float(height)) * 100, 1)
         area_px = int(cv2.contourArea(cnt))
+        
         hotspots.append({
             "id": idx + 1,
-            "x": center_x,
-            "y": center_y,
+            "x": max(1.0, min(99.0, center_x)),
+            "y": max(1.0, min(99.0, center_y)),
             "w": max(w_pct, 2.5),
             "h": max(h_pct, 2.5),
             "area_px": area_px
