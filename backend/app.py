@@ -660,12 +660,12 @@ def analyze_rice_health(img, weather_condition="hot"):
     is_blight = False
     blight_sim = next((s for d, s in visual_matches if d == "Blight"), 0.0)
 
-    if not is_leaf_strip and not is_confidently_healthy:
+    if not is_leaf_strip and not is_confidently_healthy and not (dl_disease == "Blast" and dl_confidence >= 0.60):
         if top_visual_disease == "Blight" and top_visual_score >= 0.78:
             if straw_white_ratio >= 0.035 or (straw_white_ratio >= 0.025 and max_streak_ar >= 3.5) or ("Blight" in texture_diseases and straw_white_ratio >= 0.02):
                 is_blight = True
         elif blight_sim >= 0.82 and straw_white_ratio >= 0.04 and max_streak_ar >= 3.5:
-            if dl_disease in ["Brown Spot", "Blast"]:
+            if dl_disease == "Brown Spot":
                 is_blight = True
         elif "Blight" in texture_diseases and blight_sim >= 0.75 and straw_white_ratio >= 0.03 and dl_disease != top_visual_disease:
             is_blight = True
