@@ -300,27 +300,12 @@ function renderResults(data) {
     const hotspots = data.lesion_hotspots || [];
     const previewRawSrc = sessionStorage.getItem('previewImageSrc') || '';
 
-    // 4.1 Compile Rice Health percentage radial card & Canopy Health Breakdown
+    // 4.1 Compile Rice Health percentage radial card
     let resultHTML = `<h3>Analysis Report</h3>
-        <div class="health-breakdown-card">
+        <div class="score-container">
             <div class="score-circle ${healthScore > 50 ? 'healthy' : 'unhealthy'}" style="--score-percent: ${healthScore}; --score-color: ${healthScore > 50 ? 'var(--primary)' : 'var(--danger)'}">
                 <span class="score-value">${healthScore}%</span>
-                <span class="score-label">Green Canopy</span>
-            </div>
-            <div class="health-metrics-badge">
-                <div class="metric-pill green-pill">
-                    <span class="dot"></span>
-                    <span>${healthScore}% Healthy Green Leaf</span>
-                </div>
-                ${!isHealthy ? `
-                <div class="metric-pill red-pill">
-                    <span class="dot"></span>
-                    <span>${infectedArea}% Lesion Area (${severityLabel})</span>
-                </div>` : `
-                <div class="metric-pill green-pill">
-                    <span class="dot"></span>
-                    <span>No Disease Lesions Detected</span>
-                </div>`}
+                <span class="score-label">Rice Health Score</span>
             </div>
         </div>`;
 
@@ -411,7 +396,7 @@ function renderResults(data) {
                             <p class="popover-why"><strong>Why this spot:</strong> ${whyDetected}</p>
                             <div class="popover-specs">
                                 <div><strong>Key Signs:</strong> ${diseaseSymptom}</div>
-                                <span class="popover-damage">Affected canopy area: ${infectedArea}%</span>
+                                <span class="popover-damage">Affected leaf area: ${infectedArea}%</span>
                             </div>
                         </div>
                         <div class="popover-footer">
