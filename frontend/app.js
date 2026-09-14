@@ -289,55 +289,137 @@ async function analyzeImage(e) {
 function renderResults(data) {
     console.log("Analysis Data Received:", data);
     const healthScore = (data.health_score * 100).toFixed(1); // Translate 0-1 range to 0-100% scale
+    const infectedArea = data.infected_area_pct !== undefined ? parseFloat(data.infected_area_pct).toFixed(1) : Math.max(0, (100 - parseFloat(healthScore))).toFixed(1);
+    
+    const primaryDisease = data.primary_disease || (data.confirmed_diseases && data.confirmed_diseases[0]) || (data.visual_matches && data.visual_matches[0] && data.visual_matches[0].name) || (data.diseases && data.diseases[0]) || "Healthy";
+    const primaryDiseaseTL = data.primary_disease_tl || primaryDisease;
+    const severityLabel = data.severity_label || (data.is_healthy ? "Healthy" : "Mild / Early Stage");
+    const whyDetected = data.why_detected || "The AI system detected distinctive discoloration and lesion patterns on the leaf blade.";
+    const diseaseSymptom = data.disease_symptom || "Necrotic lesion spots observed on the leaf surface.";
+    const isHealthy = data.is_healthy || primaryDisease === "Healthy";
+    const hotspots = data.lesion_hotspots || [];
+    const previewRawSrc = sessionStorage.getItem('previewImageSrc') || '';
 
-    // 4.1 Compile Rice Health percentage radial card
+    // 4.1 Compile Rice Health percentage radial card & Canopy Health Breakdown
     let resultHTML = `<h3>Analysis Report</h3>
-        <div class="score-container">
+        <div class="health-breakdown-card">
             <div class="score-circle ${healthScore > 50 ? 'healthy' : 'unhealthy'}" style="--score-percent: ${healthScore}; --score-color: ${healthScore > 50 ? 'var(--primary)' : 'var(--danger)'}">
                 <span class="score-value">${healthScore}%</span>
-                <span class="score-label">Rice Health Score</span>
+                <span class="score-label">Green Canopy</span>
+            </div>
+            <div class="health-metrics-badge">
+                <div class="metric-pill green-pill">
+                    <span class="dot"></span>
+                    <span>${healthScore}% Healthy Green Leaf</span>
+                </div>
+                ${!isHealthy ? `
+                <div class="metric-pill red-pill">
+                    <span class="dot"></span>
+                    <span>${infectedArea}% Lesion Area (${severityLabel})</span>
+                </div>` : `
+                <div class="metric-pill green-pill">
+                    <span class="dot"></span>
+                    <span>No Disease Lesions Detected</span>
+                </div>`}
             </div>
         </div>`;
 
-    // 4.2 List detected anomalies/diseases and similarity margins
-    if (data.visual_matches && data.visual_matches.length > 0) {
-        // Populate diseases using MobileNetV2 similarity rankings
-        resultHTML += `<div class="visual-matches"><h4>Possible Diseases Detected</h4><ul>
-            ${data.visual_matches.map(match => `
-                <li>
-                    <div class="match-info">
-                        <span>${match.name}</span>
-                        <div class="similarity-score">
-                            <div class="similarity-bar-bg">
-                                <div class="similarity-bar" style="width: ${parseFloat(match.similarity) * 100}%"></div>
+    // 4.2 Primary Diagnosis Card (Clean, Non-dizzying presentation)
+    resultHTML += `
+        <div class="primary-diagnosis-card ${isHealthy ? 'healthy' : 'unhealthy'}">
+            <div class="diag-card-header">
+                <div class="diag-title-wrap">
+                    <span style="font-size:0.8rem; font-weight:700; color:${isHealthy ? '#15803d' : '#ef4444'}; text-transform:uppercase; letter-spacing:0.5px;">
+                        ${isHealthy ? '✅ Crop Health Status' : '⚠️ Primary Disease Identified'}
+                    </span>
+                    <h4>${primaryDisease}</h4>
+                    <span class="diag-local-name">${primaryDiseaseTL}</span>
+                </div>
+                <span class="diag-badge ${
+                    isHealthy ? 'severity-healthy' :
+                    severityLabel.toLowerCase().includes('mild') ? 'severity-mild' :
+                    severityLabel.toLowerCase().includes('moderate') ? 'severity-moderate' : 'severity-severe'
+                }">${severityLabel}</span>
+            </div>
+
+            <div class="diag-why-box">
+                <p style="margin:0 0 6px 0;"><strong>🔍 Why this was detected:</strong> ${whyDetected}</p>
+                <p style="margin:0; font-size:0.88rem; color:#64748b;"><strong>Typical Symptoms:</strong> ${diseaseSymptom}</p>
+            </div>
+
+            <div class="diag-card-footer">
+                ${isHealthy ? '' : (
+                    primaryDisease.toLowerCase().includes('rust')
+                        ? `<button class="info-btn disabled" disabled style="background:#64748b; color:#fff; cursor:not-allowed; opacity:0.85;">Update Coming Soon</button>`
+                        : `<button class="info-btn" onclick="window.location.href='disease-info.html?disease=${encodeURIComponent(primaryDisease)}'">Detailed Treatment Guide &rarr;</button>`
+                )}
+            </div>
+
+            ${(data.visual_matches && data.visual_matches.length > 1) ? `
+            <details class="secondary-differential-box">
+                <summary>🔬 Secondary AI Model Considerations (${data.visual_matches.length - 1} other)</summary>
+                <p style="margin:8px 0 4px 0; font-size:0.85rem; color:#64748b;">The AI evaluated other possibilities with low probability:</p>
+                <ul style="margin:4px 0 0 0; padding-left:18px;">
+                    ${data.visual_matches.slice(1).map(m => `
+                        <li><strong>${m.name}</strong>: ${(parseFloat(m.similarity) * 100).toFixed(0)}% probability</li>
+                    `).join('')}
+                </ul>
+            </details>` : ''}
+        </div>`;
+
+    // 4.3 Diagnostic Area highlighting with Interactive Hotspots & Hover/Tap Inspector
+    if (data.highlighted_image) {
+        resultHTML += `
+            <div class="highlighted-image-container">
+                <div class="diag-header-row">
+                    <div>
+                        <h4>Diagnostic Visualization</h4>
+                        <p class="diag-subtitle">${isHealthy ? 'Scanned image shows no severe pathogen damage.' : 'Hover or tap over the red highlights to inspect why this spot was flagged.'}</p>
+                    </div>
+                    <div class="image-toggle-controls">
+                        <button type="button" id="btnShowMask" class="layer-toggle-btn active">🔴 Red Highlight</button>
+                        <button type="button" id="btnShowOriginal" class="layer-toggle-btn">🍃 Original Leaf</button>
+                    </div>
+                </div>
+
+                <div class="interactive-scan-wrapper" id="scanViewer">
+                    <img id="activeScanImg" src="${data.highlighted_image}" alt="Scanned Rice Leaf" class="highlight-img" />
+
+                    ${(!isHealthy && hotspots.length > 0) ? `
+                    <div class="hotspots-layer" id="hotspotsLayer">
+                        ${hotspots.map(h => `
+                            <div class="lesion-hotspot-pin"
+                                 style="left: ${h.x}%; top: ${h.y}%;"
+                                 data-id="${h.id}"
+                                 data-x="${h.x}"
+                                 data-y="${h.y}"
+                                 title="Inspect lesion #${h.id}">
+                                <span class="pin-ring"></span>
+                                <span class="pin-dot"></span>
                             </div>
-                            <span>${(parseFloat(match.similarity) * 100).toFixed(0)}% match</span>
+                        `).join('')}
+                    </div>` : ''}
+
+                    <!-- Interactive Popover Card -->
+                    <div id="lesionInspectionPopover" class="lesion-popover" style="display: none;">
+                        <div class="popover-header">
+                            <span class="popover-tag">🔬 Lesion Inspector</span>
+                            <button class="popover-close-btn" id="closePopoverBtn" type="button">&times;</button>
+                        </div>
+                        <div class="popover-body">
+                            <h5 class="popover-disease">${primaryDisease}</h5>
+                            <p class="popover-why"><strong>Why this spot:</strong> ${whyDetected}</p>
+                            <div class="popover-specs">
+                                <div><strong>Key Signs:</strong> ${diseaseSymptom}</div>
+                                <span class="popover-damage">Affected canopy area: ${infectedArea}%</span>
+                            </div>
+                        </div>
+                        <div class="popover-footer">
+                            <a href="disease-info.html?disease=${encodeURIComponent(primaryDisease)}" class="popover-link-btn">View Treatment Guide &rarr;</a>
                         </div>
                     </div>
-                    ${match.name.toLowerCase().includes('rust') ? `<button class="info-btn disabled" disabled style="background:#64748b; color:#fff; cursor:not-allowed; opacity:0.85;">Update Coming Soon</button>` : `<button class="info-btn" onclick="window.location.href='disease-info.html?disease=${encodeURIComponent(match.name)}'">Learn More</button>`}
-                </li>
-            `).join('')}</ul></div>`;
-    } else if (data.diseases && data.diseases.length > 0) {
-        // Fallback for color/texture-only heuristic matches
-        resultHTML += `<div class="visual-matches"><h4>Possible Diseases Detected</h4><ul>
-            ${data.diseases.map(disease => `
-                <li>
-                    <div class="match-info">
-                        <span>${disease}</span>
-                        <p style="font-size: 0.8rem; opacity: 0.7;">Detected via visual pattern analysis</p>
-                    </div>
-                    ${disease.toLowerCase().includes('rust') ? `<button class="info-btn disabled" disabled style="background:#64748b; color:#fff; cursor:not-allowed; opacity:0.85;">Update Coming Soon</button>` : `<button class="info-btn" onclick="window.location.href='disease-info.html?disease=${encodeURIComponent(disease)}'">Learn More</button>`}
-                </li>
-            `).join('')}</ul></div>`;
-    }
-
-    // 4.3 Diagnostic Area highlighting (Visual representation)
-    if (data.highlighted_image) {
-        resultHTML += `<div class="highlighted-image-container">
-            <h4>Diagnostic Visualization</h4>
-            <p>Infected areas are highlighted in red for your review.</p>
-            <div class="highlight-img-wrapper"><img src="${data.highlighted_image}" alt="Highlights" class="highlight-img"></div>
-        </div>`;
+                </div>
+            </div>`;
     }
 
     // 4.4 Render bottom control buttons
@@ -351,6 +433,9 @@ function renderResults(data) {
 
     document.getElementById("results").innerHTML = resultHTML;
     document.getElementById("results").scrollIntoView({ behavior: 'smooth' });
+
+    // --- 4.5 BIND INTERACTIVE LESION INSPECTION EVENTS ---
+    initInteractiveInspection(data, previewRawSrc);
 
     // --- 5. PDF REPORT GENERATOR ---
     // Converts the hidden formal template into an A4 PDF booklet.
@@ -441,3 +526,106 @@ function renderResults(data) {
         window.open(messengerLink, '_blank');
     });
 }
+
+// --- 7. INTERACTIVE LESION INSPECTION LOGIC ---
+function initInteractiveInspection(data, previewRawSrc) {
+    const activeScanImg = document.getElementById("activeScanImg");
+    const btnShowMask = document.getElementById("btnShowMask");
+    const btnShowOriginal = document.getElementById("btnShowOriginal");
+    const hotspotsLayer = document.getElementById("hotspotsLayer");
+    const popover = document.getElementById("lesionInspectionPopover");
+    const closePopoverBtn = document.getElementById("closePopoverBtn");
+    const scanViewer = document.getElementById("scanViewer");
+
+    if (!scanViewer) return;
+
+    // 1. Layer switcher toggle (Red Mask vs Original Leaf)
+    if (btnShowMask && btnShowOriginal && activeScanImg) {
+        btnShowMask.addEventListener("click", () => {
+            activeScanImg.src = data.highlighted_image;
+            btnShowMask.classList.add("active");
+            btnShowOriginal.classList.remove("active");
+            if (hotspotsLayer) hotspotsLayer.style.display = "block";
+        });
+
+        btnShowOriginal.addEventListener("click", () => {
+            const rawSrc = previewRawSrc || data.highlighted_image;
+            activeScanImg.src = rawSrc;
+            btnShowOriginal.classList.add("active");
+            btnShowMask.classList.remove("active");
+            if (hotspotsLayer) hotspotsLayer.style.display = "none";
+            if (popover) popover.style.display = "none";
+        });
+    }
+
+    // 2. Popover close
+    if (closePopoverBtn && popover) {
+        closePopoverBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            popover.style.display = "none";
+            document.querySelectorAll(".lesion-hotspot-pin").forEach(p => p.classList.remove("active"));
+        });
+    }
+
+    // 3. Hotspot pin inspection (Desktop hover + Mobile touch)
+    const pins = document.querySelectorAll(".lesion-hotspot-pin");
+    function showPopoverAt(xPct, yPct) {
+        if (!popover) return;
+        popover.style.display = "block";
+        
+        // Smart bounds positioning
+        if (xPct > 55) {
+            popover.style.left = "auto";
+            popover.style.right = Math.max(4, 100 - xPct + 3) + "%";
+        } else {
+            popover.style.right = "auto";
+            popover.style.left = Math.max(4, xPct + 3) + "%";
+        }
+
+        if (yPct > 55) {
+            popover.style.top = "auto";
+            popover.style.bottom = Math.max(4, 100 - yPct + 3) + "%";
+        } else {
+            popover.style.bottom = "auto";
+            popover.style.top = Math.max(4, yPct + 3) + "%";
+        }
+    }
+
+    pins.forEach(pin => {
+        const x = parseFloat(pin.dataset.x);
+        const y = parseFloat(pin.dataset.y);
+
+        pin.addEventListener("mouseenter", () => {
+            showPopoverAt(x, y);
+            pins.forEach(p => p.classList.remove("active"));
+            pin.classList.add("active");
+        });
+
+        pin.addEventListener("click", (e) => {
+            e.stopPropagation();
+            showPopoverAt(x, y);
+            pins.forEach(p => p.classList.remove("active"));
+            pin.classList.add("active");
+        });
+    });
+
+    // Auto open the first lesion pin briefly as a visual hint for farmers
+    if (pins.length > 0) {
+        setTimeout(() => {
+            const firstPin = pins[0];
+            const x = parseFloat(firstPin.dataset.x);
+            const y = parseFloat(firstPin.dataset.y);
+            showPopoverAt(x, y);
+            firstPin.classList.add("active");
+        }, 600);
+    }
+
+    // Tap anywhere on image viewer to close if clicking outside pin and popover
+    scanViewer.addEventListener("click", (e) => {
+        if (popover && !popover.contains(e.target) && !e.target.closest(".lesion-hotspot-pin")) {
+            popover.style.display = "none";
+            pins.forEach(p => p.classList.remove("active"));
+        }
+    });
+}
+

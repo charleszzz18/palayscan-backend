@@ -147,3 +147,42 @@ def analyze_color(img): # Main color engine | CHANGE: Add 'sensitivity' paramete
     print(f"Blight Capture - Healthy: {healthy_pixels}, Leaf: {leaf_pixels}, Score: {health_score}, Stage: {growth_stage}") # Log diagnostic metrics
     
     return health_score, final_healthy_mask, final_infected_mask, growth_stage, None # Return all calculated results to main app
+
+
+def extract_lesion_hotspots(infected_mask, max_spots=8):
+    """
+    Finds prominent lesion contours in the infected mask and computes
+    normalized percentage coordinates (x%, y%, w%, h%) for interactive UI hotspots.
+    """
+    if infected_mask is None:
+        return []
+    
+    height, width = infected_mask.shape[:2]
+    total_pixels = height * width
+    if total_pixels == 0:
+        return []
+        
+    contours, _ = cv2.findContours(infected_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    min_area = max(10, int(total_pixels * 0.0001)) # Filter out tiny single-pixel noise
+    valid_contours = [c for c in contours if cv2.contourArea(c) >= min_area]
+    
+    # Sort largest lesion clusters first
+    valid_contours.sort(key=lambda c: cv2.contourArea(c), reverse=True)
+    
+    hotspots = []
+    for idx, cnt in enumerate(valid_contours[:max_spots]):
+        x, y, w, h = cv2.boundingRect(cnt)
+        center_x = round(((x + w / 2.0) / float(width)) * 100, 1)
+        center_y = round(((y + h / 2.0) / float(height)) * 100, 1)
+        w_pct = round((w / float(width)) * 100, 1)
+        h_pct = round((h / float(height)) * 100, 1)
+        area_px = int(cv2.contourArea(cnt))
+        hotspots.append({
+            "id": idx + 1,
+            "x": center_x,
+            "y": center_y,
+            "w": max(w_pct, 2.5),
+            "h": max(h_pct, 2.5),
+            "area_px": area_px
+        })
+    return hotspots

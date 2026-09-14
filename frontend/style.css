@@ -488,6 +488,399 @@ main {
     color: var(--primary);
 }
 
+/* --- PRIMARY DIAGNOSIS & CANOPY BREAKDOWN --- */
+.health-breakdown-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.health-metrics-badge {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 14px;
+}
+
+.metric-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.metric-pill .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+}
+
+.metric-pill.green-pill {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #c8e6c9;
+}
+.metric-pill.green-pill .dot {
+    background: #2e7d32;
+}
+
+.metric-pill.red-pill {
+    background: #ffebee;
+    color: #c62828;
+    border: 1px solid #ffcdd2;
+}
+.metric-pill.red-pill .dot {
+    background: #c62828;
+}
+
+/* Primary Diagnosis Banner */
+.primary-diagnosis-card {
+    background: var(--clay-surface);
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: var(--clay-shadow);
+    margin: 24px 0 35px 0;
+    border-left: 6px solid var(--primary);
+    text-align: left;
+    transition: var(--transition);
+}
+
+.primary-diagnosis-card.unhealthy {
+    border-left-color: #ef4444;
+}
+
+.diag-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.diag-title-wrap h4 {
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.diag-title-wrap .diag-local-name {
+    font-size: 0.95rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.diag-badge {
+    padding: 6px 14px;
+    border-radius: 30px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.diag-badge.severity-mild {
+    background: #fef3c7;
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+.diag-badge.severity-moderate {
+    background: #ffedd5;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+}
+.diag-badge.severity-severe {
+    background: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+.diag-badge.severity-healthy {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
+.diag-why-box {
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin: 14px 0;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    line-height: 1.5;
+    color: #334155;
+    font-size: 0.95rem;
+}
+
+.diag-why-box strong {
+    color: #0f172a;
+}
+
+.diag-card-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+/* Secondary Differential Details */
+.secondary-differential-box {
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    padding: 12px 18px;
+    margin-top: 18px;
+    font-size: 0.9rem;
+    color: #475569;
+}
+
+.secondary-differential-box summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #1e293b;
+    outline: none;
+}
+
+.secondary-differential-box ul {
+    margin-top: 10px;
+    padding-left: 20px;
+}
+
+/* --- INTERACTIVE SCANNED IMAGE & LESION INSPECTION --- */
+.diag-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+.diag-subtitle {
+    font-size: 0.92rem;
+    color: #64748b;
+    margin: 4px 0 0 0;
+}
+
+.image-toggle-controls {
+    display: inline-flex;
+    background: #e2e8f0;
+    padding: 4px;
+    border-radius: 50px;
+    gap: 4px;
+}
+
+.layer-toggle-btn {
+    border: none;
+    background: transparent;
+    padding: 8px 16px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #475569;
+    transition: all 0.2s ease;
+}
+
+.layer-toggle-btn.active {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.interactive-scan-wrapper {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+    background: #000;
+}
+
+.interactive-scan-wrapper img.highlight-img {
+    display: block;
+    width: 100%;
+    max-height: 520px;
+    object-fit: contain;
+    transition: opacity 0.3s ease;
+    user-select: none;
+}
+
+.hotspots-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+}
+
+/* Lesion Hotspot Pins */
+.lesion-hotspot-pin {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.lesion-hotspot-pin:hover,
+.lesion-hotspot-pin.active {
+    transform: translate(-50%, -50%) scale(1.3);
+}
+
+.pin-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    min-width: 24px;
+    min-height: 24px;
+    border: 2px solid #ef4444;
+    background: rgba(239, 68, 68, 0.28);
+    border-radius: 50%;
+    animation: lesionPulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.pin-dot {
+    width: 8px;
+    height: 8px;
+    background: #ff0000;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
+}
+
+@keyframes lesionPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.95;
+    }
+    50% {
+        transform: scale(1.7);
+        opacity: 0.25;
+    }
+}
+
+/* Floating Inspection Tooltip / Popover */
+.lesion-popover {
+    position: absolute;
+    z-index: 25;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #ffffff;
+    border-radius: 14px;
+    padding: 16px 20px;
+    width: 290px;
+    max-width: 88vw;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    text-align: left;
+    pointer-events: auto;
+    animation: popoverFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes popoverFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.popover-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.popover-tag {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #f87171;
+    letter-spacing: 0.5px;
+}
+
+.popover-close-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.3rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+}
+.popover-close-btn:hover {
+    color: #ffffff;
+}
+
+.popover-disease {
+    margin: 0 0 6px 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.popover-why {
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: #cbd5e1;
+    margin: 0 0 10px 0;
+}
+
+.popover-why strong {
+    color: #fca5a5;
+}
+
+.popover-specs {
+    font-size: 0.82rem;
+    color: #94a3b8;
+    line-height: 1.4;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 8px;
+    margin-bottom: 12px;
+}
+
+.popover-damage {
+    display: block;
+    color: #f87171;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+.popover-footer a.popover-link-btn {
+    display: inline-block;
+    width: 100%;
+    text-align: center;
+    background: #ef4444;
+    color: #ffffff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.2s ease;
+    box-sizing: border-box;
+}
+
+.popover-footer a.popover-link-btn:hover {
+    background: #dc2626;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 640px) {
     main {

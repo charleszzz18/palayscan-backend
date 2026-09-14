@@ -18,7 +18,7 @@ import uuid
 import functools
 
 # --- Import custom local processing modules ---
-from color_analysis import analyze_color       # Detects leaf color thresholds and growth stages
+from color_analysis import analyze_color, extract_lesion_hotspots       # Detects leaf color thresholds, lesions, and growth stages
 from texture_analysis import analyze_texture   # Evaluates leaf surface textures for disease patterns
 from disease_db import (
     get_advice, filter_diseases_by_weather,
@@ -325,6 +325,51 @@ def detect_leaf_streaks(img):
 
 # --- 7. CORE DIAGNOSTIC LOGIC ---
 
+DISEASE_DIAGNOSTIC_EXPLANATIONS = {
+    "Brown Spot": {
+        "name": "Brown Spot",
+        "name_tl": "Brown Spot (Mantsang Kayumanggi)",
+        "symptom": "Circular to oval reddish-brown lesions with gray necrotic centers and yellow chlorotic halos.",
+        "symptom_tl": "Maliliit na bilog o pahabang kayumangging patse na may abuhing gitna at madilaw na paligid sa dahon.",
+        "why_detected": "The leaf blade exhibits discrete circular/oval brown spots with necrotic centers, characteristic of Bipolaris oryzae fungal infection."
+    },
+    "Blast": {
+        "name": "Rice Blast",
+        "name_tl": "Rice Blast (Pumutok/Dahon Blast)",
+        "symptom": "Spindle-shaped or diamond-shaped lesions with pointed ends, gray-whitish centers, and dark brown margins.",
+        "symptom_tl": "Hugis-brilyanteng mga sugat na may matulis na dulo, abuhing gitna, at maitim na kayumangging gilid.",
+        "why_detected": "Diamond- or spindle-shaped lesions observed across the leaf blade, characteristic of Pyricularia oryzae fungal blast."
+    },
+    "Blight": {
+        "name": "Bacterial Leaf Blight",
+        "name_tl": "Bacterial Leaf Blight (Bacterial Hawas)",
+        "symptom": "Water-soaked stripes starting from leaf tips and margins, rapidly turning wavy yellowish-white or straw-colored.",
+        "symptom_tl": "Parang basang mga guhit mula sa dulo at gilid ng dahon na nagiging madilaw hanggang mapuputi.",
+        "why_detected": "Marginal chlorotic and wavy lesions progressing inward along veins from the leaf margin, indicative of Xanthomonas oryzae."
+    },
+    "Leaf Strip": {
+        "name": "Bacterial Leaf Streak",
+        "name_tl": "Bacterial Leaf Streak (Leaf Strip)",
+        "symptom": "Narrow, interveinal linear streaks between leaf veins that turn yellowish-brown.",
+        "symptom_tl": "Maninipis na linyang sugat sa pagitan ng mga ugat ng dahon na nagiging kulay kayumanggi.",
+        "why_detected": "Linear lesion streaks restricted between leaf veins with translucent or yellowish-brown appearance."
+    },
+    "Rust": {
+        "name": "Leaf Rust",
+        "name_tl": "Leaf Rust (Kalawang sa Dahon)",
+        "symptom": "Small, powdery orange-brown pustules scattered across the leaf blade.",
+        "symptom_tl": "Maliliit at parang pulbos na mamula-mulang kayumangging bukol sa ibabaw ng dahon.",
+        "why_detected": "Powdery reddish-orange pustules observed erupting across the leaf surface."
+    },
+    "Healthy": {
+        "name": "Healthy",
+        "name_tl": "Malusog na Palay",
+        "symptom": "Uniform green leaf tissue with no necrotic lesions or pathogen spots.",
+        "symptom_tl": "Matingkad na luntiang dahon nang walang anumang sugat o bakas ng peste.",
+        "why_detected": "No significant necrotic or fungal discoloration detected on the leaf surface."
+    }
+}
+
 def analyze_rice_health(img, weather_condition="hot"):
     """
     Main image processing pipeline:
@@ -336,6 +381,7 @@ def analyze_rice_health(img, weather_condition="hot"):
     """
     # 7.1 Run HSV color thresholding
     health_score, healthy_mask, unhealthy_mask, stage, bad_background = analyze_color(img)
+    lesion_hotspots = extract_lesion_hotspots(unhealthy_mask)
     
     # Check for background validation failure immediately
     if bad_background:
@@ -464,9 +510,12 @@ def analyze_rice_health(img, weather_condition="hot"):
                 possible_diseases.append(top_visual_disease)
                 
         visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
-        for name, score in visual_matches:
-            if name != dl_disease and score >= 0.50:
-                visual_matches_formatted.append({"name": name, "similarity": f"{score:.2f}"})
+        # Use DL model probabilities for secondary candidates so all match percentages use the exact same scale
+        for name, conf in sorted(dl_all_preds.items(), key=lambda x: x[1], reverse=True):
+            if name != dl_disease and name in SUPPORTED_DISEASES and conf >= 0.15 and name != "Healthy":
+                visual_matches_formatted.append({"name": name, "similarity": f"{conf:.2f}"})
+                if name not in possible_diseases and conf >= 0.25:
+                    possible_diseases.append(name)
     elif top_visual_disease and top_visual_score >= 0.45:
         # Fallback to visual fingerprints if DL is uncertain
         possible_diseases.append(top_visual_disease)
@@ -512,10 +561,30 @@ def analyze_rice_health(img, weather_condition="hot"):
         message = f"Unhealthy rice detected, but no specific disease identified for {weather_context.lower()} conditions during the {stage} stage"
 
     primary_disease = confirmed_diseases[0] if confirmed_diseases else possible_diseases[0] if possible_diseases else "Healthy"
+    infected_area_pct = round(max(0.0, (1.0 - health_score) * 100), 1)
+
+    if is_healthy or primary_disease == "Healthy":
+        severity_label = "Healthy"
+    elif infected_area_pct <= 12.0:
+        severity_label = "Mild / Early Stage"
+    elif infected_area_pct <= 28.0:
+        severity_label = "Moderate"
+    else:
+        severity_label = "Severe"
+
+    diag_info = DISEASE_DIAGNOSTIC_EXPLANATIONS.get(primary_disease, DISEASE_DIAGNOSTIC_EXPLANATIONS.get("Healthy", {}))
 
     return {
         "health_score":       float(health_score),
         "is_healthy":         is_healthy,
+        "primary_disease":    primary_disease,
+        "primary_disease_tl": diag_info.get("name_tl", primary_disease),
+        "disease_symptom":    diag_info.get("symptom", ""),
+        "disease_symptom_tl": diag_info.get("symptom_tl", ""),
+        "why_detected":       diag_info.get("why_detected", ""),
+        "infected_area_pct":  infected_area_pct,
+        "severity_label":     severity_label,
+        "lesion_hotspots":    lesion_hotspots if not is_healthy else [],
         "diseases":           possible_diseases if possible_diseases else None,
         "confirmed_diseases": confirmed_diseases if confirmed_diseases else None,
         "visual_matches":     visual_matches_formatted if visual_matches_formatted else None,
