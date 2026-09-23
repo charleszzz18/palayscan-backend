@@ -983,16 +983,51 @@ def get_barangay_summary(barangay):
 
         cursor.execute("""
             SELECT sr.id, u.full_name, COALESCE(u.username, SUBSTRING_INDEX(u.email, '@', 1)) as username,
-                   sr.detected_diseases, sr.is_healthy, sr.weather_condition, sr.created_at
+                   sr.detected_diseases, sr.is_healthy, sr.weather_condition, sr.created_at, sr.image_filename
             FROM scan_records sr
             JOIN users u ON sr.user_id = u.id
             WHERE LOWER(u.barangay) = LOWER(%s)
-            ORDER BY sr.created_at DESC LIMIT 20
+            ORDER BY sr.created_at DESC LIMIT 30
         """, (clean_b,))
-        recent_scans = [{
-            'id': r[0], 'user_name': r[1], 'username': r[2], 'disease': r[3],
-            'status': 'Healthy' if r[4] else 'Not Healthy', 'weather': r[5], 'created_at': str(r[6])
-        } for r in cursor.fetchall()]
+
+        recent_scans = []
+        disease_samples = {}
+        for r in cursor.fetchall():
+            scan_id = r[0]
+            user_name = r[1] or 'Farmer'
+            username = r[2] or ''
+            disease = r[3] or ('Healthy' if r[4] else 'Not Healthy')
+            is_healthy = bool(r[4])
+            weather = r[5] or 'Normal'
+            created_at = str(r[6])
+            img_file = r[7] or ''
+            img_url = f"/uploads/{img_file}" if img_file else None
+
+            scan_item = {
+                'id': scan_id,
+                'user_name': user_name,
+                'username': username,
+                'disease': disease,
+                'detected_diseases': disease,
+                'is_healthy': is_healthy,
+                'status': 'Healthy' if is_healthy else 'Not Healthy',
+                'weather': weather,
+                'created_at': created_at,
+                'image_filename': img_file,
+                'image_url': img_url
+            }
+            recent_scans.append(scan_item)
+
+            if img_url:
+                if disease not in disease_samples:
+                    disease_samples[disease] = []
+                if len(disease_samples[disease]) < 4:
+                    disease_samples[disease].append({
+                        'scan_id': scan_id,
+                        'image_url': img_url,
+                        'created_at': created_at,
+                        'farmer': user_name
+                    })
 
         conn.close()
 
@@ -1010,6 +1045,7 @@ def get_barangay_summary(barangay):
             'primary_disease': top_disease,
             'disease_counts': disease_dict,
             'disease_list': disease_counts,
+            'disease_samples': disease_samples,
             'recent_scans': recent_scans
         }
     except Exception as e:

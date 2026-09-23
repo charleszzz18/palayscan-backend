@@ -1449,25 +1449,68 @@ async function openBarangaySummaryModal(barangayName) {
         const recentScans = data.recent_scans || [];
 
         const counts = data.disease_counts || {};
+        const samples = data.disease_samples || {};
         const diseaseBreakdownRows = (Array.isArray(counts)
             ? counts.map(item => [item.disease, item.count])
             : Object.entries(counts))
-            .map(([disease, count]) => `
-                <div style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid #e2e8f0;text-align:center;">
-                    <div style="font-size:0.8rem;color:#64748b;">${disease}</div>
-                    <div style="font-size:1.3rem;font-weight:700;color:${count > 0 ? '#dc2626' : '#16a34a'};margin-top:4px;">${count}</div>
-                </div>
-            `).join('');
+            .map(([disease, count]) => {
+                const diseaseImages = samples[disease] || [];
+                const imagesHtml = diseaseImages.length ? `
+                    <div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:10px;flex-wrap:wrap;">
+                        ${diseaseImages.map(img => `
+                            <div style="position:relative;cursor:pointer;display:inline-block;" onclick="openEnlargedImage('${img.image_url}', '📍 ${escapeHtml(brgy)} - ${escapeHtml(disease)} (Scan #${img.scan_id})')" title="Tap to enlarge scanned leaf">
+                                <img src="${img.image_url}" alt="${disease}" style="width:58px;height:58px;object-fit:cover;border-radius:8px;border:2px solid #cbd5e1;box-shadow:0 2px 5px rgba(0,0,0,0.1);transition:transform 0.18s,border-color 0.18s;" onmouseover="this.style.transform='scale(1.08)';this.style.borderColor='#166534'" onmouseout="this.style.transform='scale(1)';this.style.borderColor='#cbd5e1'" />
+                                <span style="position:absolute;bottom:2px;right:2px;background:rgba(15,23,42,0.75);color:#fff;font-size:0.6rem;padding:1px 4px;border-radius:4px;line-height:1;">🔍</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `<div style="font-size:0.75rem;color:#94a3b8;margin-top:6px;">No photo available</div>`;
 
-        const scansRows = recentScans.length ? recentScans.map(s => `
-            <tr>
-                <td>${s.created_at ? s.created_at.substring(0, 16) : '—'}</td>
-                <td><strong>${s.user_name || 'Farmer'}</strong></td>
-                <td>${s.detected_diseases || 'Healthy'}</td>
-                <td>${s.is_healthy ? '<span style="color:#16a34a;font-weight:600;">Healthy</span>' : '<span style="color:#dc2626;font-weight:600;">Not Healthy</span>'}</td>
-                <td><span class="badge ${s.is_healthy ? 'badge-healthy' : 'badge-disease'}">${s.is_healthy ? 'Healthy' : 'Not Healthy'}</span></td>
-            </tr>
-        `).join('') : '<tr><td colspan="5" style="text-align:center;padding:20px;color:#94a3b8;">No scan records found in this barangay.</td></tr>';
+                return `
+                    <div style="background:#fff;padding:14px;border-radius:12px;border:1.5px solid #e2e8f0;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.03);min-width:140px;">
+                        <div style="font-size:0.9rem;font-weight:700;color:#1e293b;">${escapeHtml(disease)}</div>
+                        <div style="font-size:1.4rem;font-weight:800;color:${count > 0 ? '#dc2626' : '#16a34a'};margin:2px 0 6px;">${count} <span style="font-size:0.8rem;font-weight:500;color:#64748b;">case${count !== 1 ? 's' : ''}</span></div>
+                        <div style="border-top:1px dashed #e2e8f0;padding-top:6px;">
+                            <span style="font-size:0.72rem;color:#64748b;font-weight:600;display:block;">📸 Scanned Leaf:</span>
+                            ${imagesHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+        const scansRows = recentScans.length ? recentScans.map(s => {
+            const diseaseName = s.detected_diseases || s.disease || (s.is_healthy ? 'Healthy' : 'Not Healthy');
+            const isHealthy = s.is_healthy === true;
+            const imgThumb = s.image_url ? `
+                <div style="position:relative;display:inline-block;cursor:pointer;" onclick="openEnlargedImage('${s.image_url}', '📍 ${escapeHtml(brgy)} - Scan #${s.id} (${escapeHtml(diseaseName)})')" title="Tap to enlarge leaf photo">
+                    <img src="${s.image_url}" alt="Scan #${s.id}" style="width:46px;height:46px;object-fit:cover;border-radius:8px;border:1.5px solid #cbd5e1;box-shadow:0 1px 4px rgba(0,0,0,0.1);vertical-align:middle;transition:transform 0.15s;" onmouseover="this.style.transform='scale(1.12)'" onmouseout="this.style.transform='scale(1)'" />
+                    <span style="position:absolute;bottom:1px;right:1px;background:rgba(15,23,42,0.8);color:#fff;font-size:0.55rem;padding:1px 3px;border-radius:3px;">🔍</span>
+                </div>
+            ` : `<span style="color:#94a3b8;font-size:0.75rem;">No Photo</span>`;
+
+            return `
+                <tr>
+                    <td style="white-space:nowrap;font-size:0.82rem;color:#475569;">${s.created_at ? s.created_at.substring(0, 16) : '—'}</td>
+                    <td style="text-align:center;">${imgThumb}</td>
+                    <td><strong>${escapeHtml(s.user_name || s.username || 'Farmer')}</strong></td>
+                    <td>
+                        <strong style="color:${isHealthy ? '#16a34a' : '#dc2626'};font-size:0.88rem;">
+                            ${isHealthy ? '🛡️ Healthy' : `🌾 ${escapeHtml(diseaseName)}`}
+                        </strong>
+                    </td>
+                    <td>
+                        <span class="badge ${isHealthy ? 'badge-healthy' : 'badge-disease'}">
+                            ${isHealthy ? 'Healthy' : 'Not Healthy'}
+                        </span>
+                    </td>
+                    <td>
+                        <button type="button" onclick="openScanModal(${s.id})" style="padding:4px 10px;background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">
+                            👁️ View
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('') : '<tr><td colspan="6" style="text-align:center;padding:20px;color:#94a3b8;">No scan records found in this barangay.</td></tr>';
 
         content.innerHTML = `
             <!-- Top Stat Cards -->
@@ -1492,7 +1535,7 @@ async function openBarangaySummaryModal(barangayName) {
 
             <!-- Disease Distribution Breakdown -->
             <h4 style="margin:16px 0 10px 0;color:#1e293b;font-size:0.95rem;">🔬 Disease Occurrence in ${brgy}</h4>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:24px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;">
                 ${diseaseBreakdownRows}
             </div>
 
@@ -1503,10 +1546,11 @@ async function openBarangaySummaryModal(barangayName) {
                     <thead>
                         <tr>
                             <th>Date & Time</th>
+                            <th style="text-align:center;">Leaf Photo</th>
                             <th>Farmer</th>
                             <th>Disease Detected</th>
-                            <th>Health Status</th>
                             <th>Status</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1523,6 +1567,29 @@ async function openBarangaySummaryModal(barangayName) {
 function closeBarangayModal() {
     const modal = document.getElementById('barangaySummaryModal');
     if (modal) modal.style.display = 'none';
+}
+
+function openEnlargedImage(imgSrc, title = 'Scanned Rice Leaf Photo') {
+    const lb = document.getElementById('palayImageLightbox');
+    const img = document.getElementById('palayLightboxImg');
+    const titleEl = document.getElementById('palayLightboxTitle');
+    if (!lb || !img) return;
+
+    img.src = imgSrc;
+    if (titleEl) titleEl.textContent = title;
+    lb.style.display = 'flex';
+}
+
+function closeEnlargedImage() {
+    const lb = document.getElementById('palayImageLightbox');
+    if (lb) lb.style.display = 'none';
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[m]);
 }
 
 // --- CHANGE PASSWORD MODAL LOGIC ---
