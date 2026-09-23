@@ -39,15 +39,33 @@ function palayscanLogout() {
 document.addEventListener('DOMContentLoaded', () => {
     
     // --- 2.1 Dynamic Header Actions Render ---
-    // If the logged-in user is an admin, render the "⚙️ Admin Panel" button next to "Logout"
+    // If the logged-in user is an admin or MAO staff, render the "← Back to Panel" button next to "Logout"
     const headerActions = document.getElementById("headerActions");
+    const isStaffOrAdmin = _user && (_user.role === 'admin' || _user.role === 'staff');
+    
     if (headerActions && _user) {
         let html = '';
-        if (_user.role === 'admin') {
-            html += `<a href="admin.html" class="header-action-btn admin-btn" style="text-decoration:none; display:flex; align-items:center; gap:6px; padding:8px 16px; background:#1e293b; color:white; font-size:0.85rem; font-weight:600; border-radius:12px; border:none; cursor:pointer; transition:var(--transition);">⚙️ Admin Panel</a>`;
+        if (isStaffOrAdmin) {
+            const panelTitle = _user.role === 'admin' ? '← Back to Admin Panel' : '← Back to MAO Panel';
+            html += `<a href="admin.html" class="header-action-btn return-panel-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 16px; background:linear-gradient(135deg, #166534, #15803d); color:#ffffff; font-size:0.86rem; font-weight:700; border-radius:12px; box-shadow:0 3px 8px rgba(22,101,52,0.25); border:1px solid rgba(255,255,255,0.25); cursor:pointer; transition:var(--transition);" title="Return to management dashboard">🏛️ <span>${panelTitle}</span></a>`;
         }
-        html += `<button onclick="palayscanLogout()" class="header-action-btn logout-btn" style="display:flex; align-items:center; gap:6px; padding:8px 16px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); font-size:0.85rem; font-weight:600; border-radius:12px; cursor:pointer; transition:var(--transition);">🚪 Logout</button>`;
+        html += `<button onclick="palayscanLogout()" class="header-action-btn logout-btn" style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); font-size:0.86rem; font-weight:600; border-radius:12px; cursor:pointer; transition:var(--transition);">🚪 Logout</button>`;
         headerActions.innerHTML = html;
+    }
+
+    // Display top notification banner for Staff/Admin in field test mode
+    const returnBanner = document.getElementById("staffReturnBanner");
+    if (returnBanner && isStaffOrAdmin) {
+        returnBanner.style.display = 'flex';
+        const titleEl = document.getElementById("staffReturnTitle");
+        const linkEl  = document.getElementById("staffReturnLink");
+        if (_user.role === 'admin') {
+            if (titleEl) titleEl.textContent = 'Administrator Field Testing Session';
+            if (linkEl)  linkEl.textContent  = '← Back to Admin Panel';
+        } else {
+            if (titleEl) titleEl.textContent = 'MAO Staff Field Testing Session';
+            if (linkEl)  linkEl.textContent  = '← Back to MAO Panel';
+        }
     }
 
     // --- 2.2 Select DOM elements ---
