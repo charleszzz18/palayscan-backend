@@ -14,7 +14,7 @@
 // If the user's browser does not hold an authentication token (they haven't logged in),
 // redirect them instantly back to the login screen.
 const _token = localStorage.getItem('palayscan_token');
-const _user  = JSON.parse(localStorage.getItem('palayscan_user') || 'null');
+const _user = JSON.parse(localStorage.getItem('palayscan_user') || 'null');
 if (!_token || !_user) {
     window.location.href = 'login.html';
 }
@@ -37,12 +37,12 @@ function palayscanLogout() {
 
 // --- 2. MAIN APPLICATION WORKFLOWS & STATE RESTORATION ---
 document.addEventListener('DOMContentLoaded', () => {
-    
+
     // --- 2.1 Dynamic Header Actions Render ---
     // If the logged-in user is an admin or MAO staff, render the "← Back to Panel" button next to "Logout"
     const headerActions = document.getElementById("headerActions");
     const isStaffOrAdmin = _user && (_user.role === 'admin' || _user.role === 'staff');
-    
+
     if (headerActions && _user) {
         let html = '';
         if (isStaffOrAdmin) {
@@ -73,13 +73,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (this.files && this.files[0]) {
             sessionStorage.removeItem('analysisData'); // Clear previous scan results
             document.getElementById("results").innerHTML = ""; // Clear results display container
-            
+
             const reader = new FileReader();
             reader.onload = function (e) {
                 previewImage.src = e.target.result; // Render selected image as preview
                 uploadArea.style.display = "none";  // Hide upload box
                 uploadPreview.style.display = "block"; // Show preview screen
-                
+
                 // Immediately start the analysis process upon uploading
                 analyzeImage(null);
             };
@@ -200,14 +200,18 @@ async function loadScanRecordById(scanId) {
 
         const isHealthy = Boolean(rec.is_healthy);
         const diseaseName = rec.detected_diseases || (isHealthy ? "Healthy" : "Unknown Issue");
+        const hlUrl = rec.highlighted_image_url ? (rec.highlighted_image_url.startsWith('http') ? rec.highlighted_image_url : `${API_BASE_URL}${rec.highlighted_image_url}`) : imgUrl;
 
         const analysisData = {
             scan_id: rec.id,
             is_healthy: isHealthy,
             primary_disease: diseaseName,
             primary_disease_tl: diseaseName,
-            health_score: isHealthy ? 0.95 : 0.40,
-            infected_area_pct: rec.infected_area_pct !== undefined ? rec.infected_area_pct : (isHealthy ? 0.0 : 4.4),
+            health_score: isHealthy ? 0.95 : Math.max(0.05, 1.0 - ((rec.infected_area_pct !== undefined ? rec.infected_area_pct : 13.1) / 100)),
+            infected_area_pct: rec.infected_area_pct !== undefined ? rec.infected_area_pct : (isHealthy ? 0.0 : 13.1),
+            diseases: isHealthy ? ['Healthy'] : [diseaseName],
+            confirmed_diseases: isHealthy ? [] : [diseaseName],
+            visual_matches: isHealthy ? [] : [{ name: diseaseName, similarity: "0.85" }],
             why_detected: isHealthy
                 ? "The leaf displays uniform vibrant green pigmentation without significant necrotic lesions or fungal signs."
                 : `Diagnostic scan flagged localized leaf discoloration and lesion spread characteristic of ${diseaseName}.`,
@@ -221,7 +225,7 @@ async function loadScanRecordById(scanId) {
                 name: rec.user_name || rec.username,
                 barangay: rec.barangay || 'Bacnotan'
             },
-            highlighted_image: imgUrl
+            highlighted_image: hlUrl
         };
 
         renderResults(analysisData);
@@ -347,7 +351,7 @@ async function analyzeImage(e) {
 
         // 90-second timeout to allow Render's free server to wake up from sleep if needed
         const controller = new AbortController();
-        const timeoutId  = setTimeout(() => controller.abort(), 90000);
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
 
         // Send payload to backend Flask engine
         const response = await fetch(`${API_BASE_URL}/upload`, {
@@ -368,9 +372,9 @@ async function analyzeImage(e) {
             const errJson = await response.json().catch(() => ({}));
             throw new Error(errJson.error || `Server returned error (${response.status})`);
         }
-        
+
         const data = await response.json();
-        
+
         // Intercept Phase 1 Validation Errors
         if (data.is_valid === false) {
             resultsDiv.innerHTML = `
@@ -419,14 +423,14 @@ async function analyzeImage(e) {
 function renderResults(data) {
     console.log("Analysis Data Received:", data);
     const healthScore = data.health_score !== undefined ? (data.health_score * 100).toFixed(1) : "95.0";
-    
+
     const primaryDisease = data.primary_disease || (data.confirmed_diseases && data.confirmed_diseases[0]) || (data.visual_matches && data.visual_matches[0] && data.visual_matches[0].name) || (data.diseases && data.diseases[0]) || "Healthy";
     const primaryDiseaseTL = data.primary_disease_tl || primaryDisease;
     const whyDetected = data.why_detected || "The AI system detected distinctive discoloration and lesion patterns on the leaf blade.";
     const diseaseSymptom = data.disease_symptom || "Necrotic lesion spots observed on the leaf surface.";
     const isHealthy = data.is_healthy || primaryDisease === "Healthy";
-    const infectedArea = data.infected_area_pct !== undefined 
-        ? parseFloat(data.infected_area_pct).toFixed(1) 
+    const infectedArea = data.infected_area_pct !== undefined
+        ? parseFloat(data.infected_area_pct).toFixed(1)
         : (isHealthy ? "0.0" : Math.max(0, (100 - parseFloat(healthScore))).toFixed(1));
     const infectionSpreadPct = isHealthy ? "0%" : `${infectedArea}%`;
     const hotspots = (data.lesion_hotspots && data.lesion_hotspots.length > 0)
@@ -434,22 +438,22 @@ function renderResults(data) {
         : (!isHealthy ? [
             { id: 1, x: 50.0, y: 45.0, w: 22.0, h: 28.0 },
             { id: 2, x: 68.0, y: 58.0, w: 18.0, h: 22.0 }
-          ] : []);
+        ] : []);
     const previewRawSrc = sessionStorage.getItem('previewImageSrc') || '';
 
     // Disease Lesion Color and Reference Photo setup
     const lesionColor = data.lesion_color || (
         primaryDisease === "Blight" ? "Straw-Yellow to Bleached Wavy White" :
-        primaryDisease === "Brown Spot" ? "Reddish-Brown with Yellow Halo" :
-        primaryDisease === "Blast" ? "Grayish-White with Dark Brown Margin" :
-        (primaryDisease === "Leaf Streak" || primaryDisease === "Leaf Strip") ? "Narrow Yellowish-Brown Streaks" : "Vibrant Clean Green"
+            primaryDisease === "Brown Spot" ? "Reddish-Brown with Yellow Halo" :
+                primaryDisease === "Blast" ? "Grayish-White with Dark Brown Margin" :
+                    (primaryDisease === "Leaf Streak" || primaryDisease === "Leaf Strip") ? "Narrow Yellowish-Brown Streaks" : "Vibrant Clean Green"
     );
 
     const colorHex = data.color_hex || (
         primaryDisease === "Blight" ? ["#eab308", "#fef08a"] :
-        primaryDisease === "Brown Spot" ? ["#78350f", "#ca8a04"] :
-        primaryDisease === "Blast" ? ["#94a3b8", "#78350f"] :
-        (primaryDisease === "Leaf Streak" || primaryDisease === "Leaf Strip") ? ["#b45309", "#d97706"] : ["#22c55e", "#16a34a"]
+            primaryDisease === "Brown Spot" ? ["#78350f", "#ca8a04"] :
+                primaryDisease === "Blast" ? ["#94a3b8", "#78350f"] :
+                    (primaryDisease === "Leaf Streak" || primaryDisease === "Leaf Strip") ? ["#b45309", "#d97706"] : ["#22c55e", "#16a34a"]
     );
 
     const apiBase = (typeof API_BASE_URL !== 'undefined' && API_BASE_URL) ? API_BASE_URL : '';
@@ -480,8 +484,8 @@ function renderResults(data) {
                 </div>
                 <div class="diag-header-action">
                     ${isHealthy ? '' : (
-                        `<button class="info-btn" onclick="window.location.href='disease-info.html?disease=${encodeURIComponent(primaryDisease)}'">Detailed Treatment Guide &rarr;</button>`
-                    )}
+            `<button class="info-btn" onclick="window.location.href='disease-info.html?disease=${encodeURIComponent(primaryDisease)}'">Detailed Treatment Guide &rarr;</button>`
+        )}
                 </div>
             </div>
 
@@ -494,14 +498,14 @@ function renderResults(data) {
             </div>
 
             ${(() => {
-                const pinpointedSecondary = new Set(
-                    (hotspots || []).filter(h => h.is_primary === false && h.disease).map(h => h.disease)
-                );
-                const verifiedSecondary = (data.visual_matches || []).slice(1).filter(m => 
-                    pinpointedSecondary.has(m.name)
-                );
-                if (verifiedSecondary.length === 0) return '';
-                return `
+            const pinpointedSecondary = new Set(
+                (hotspots || []).filter(h => h.is_primary === false && h.disease).map(h => h.disease)
+            );
+            const verifiedSecondary = (data.visual_matches || []).slice(1).filter(m =>
+                pinpointedSecondary.has(m.name)
+            );
+            if (verifiedSecondary.length === 0) return '';
+            return `
                 <details class="secondary-differential-box">
                     <summary>🔬 Secondary Model Considerations (${verifiedSecondary.length} other)</summary>
                     <p style="margin:8px 0 4px 0; font-size:0.85rem; color:#64748b;">The system pinpointed secondary lesion characteristics on the leaf for:</p>
@@ -511,7 +515,7 @@ function renderResults(data) {
                         `).join('')}
                     </ul>
                 </details>`;
-            })()}
+        })()}
         </div>
         ${(data.treatments && data.treatments.length > 0) ? `
             <div style="background:#f0fdf4; border:1.5px solid #bbf7d0; border-radius:14px; padding:18px 22px; margin-top:16px; text-align:left; box-shadow:0 2px 8px rgba(34,197,94,0.06);">
@@ -576,18 +580,18 @@ function renderResults(data) {
                     ${(!isHealthy && hotspots.length > 0) ? `
                     <div class="hotspots-layer" id="hotspotsLayer">
                         ${hotspots.map((h, i) => {
-                            const pDisease = h.disease || primaryDisease;
-                            const pDiseaseTL = h.disease_tl || primaryDiseaseTL;
-                            const pProb = h.probability || (h.is_primary !== false ? 'Primary Diagnosis' : 'Candidate');
-                            const pColorName = h.lesion_color || lesionColor;
-                            const pHex1 = (h.color_hex && h.color_hex[0]) ? h.color_hex[0] : (colorHex[0] || '#ef4444');
-                            const pHex2 = (h.color_hex && h.color_hex[1]) ? h.color_hex[1] : (colorHex[1] || pHex1);
-                            const pPinFill = h.pin_color || pHex1;
-                            const pWhy = h.why || whyDetected;
-                            const pSymptom = h.symptom || diseaseSymptom;
-                            const isPrim = h.is_primary !== false;
+            const pDisease = h.disease || primaryDisease;
+            const pDiseaseTL = h.disease_tl || primaryDiseaseTL;
+            const pProb = h.probability || (h.is_primary !== false ? 'Primary Diagnosis' : 'Candidate');
+            const pColorName = h.lesion_color || lesionColor;
+            const pHex1 = (h.color_hex && h.color_hex[0]) ? h.color_hex[0] : (colorHex[0] || '#ef4444');
+            const pHex2 = (h.color_hex && h.color_hex[1]) ? h.color_hex[1] : (colorHex[1] || pHex1);
+            const pPinFill = h.pin_color || pHex1;
+            const pWhy = h.why || whyDetected;
+            const pSymptom = h.symptom || diseaseSymptom;
+            const isPrim = h.is_primary !== false;
 
-                            return `
+            return `
                             <div class="lesion-hotspot-pin ${isPrim ? 'pin-primary' : 'pin-secondary'}"
                                  style="left: ${h.x}%; top: ${h.y}%;"
                                  data-id="${h.id || (i + 1)}"
@@ -617,7 +621,7 @@ function renderResults(data) {
                                 <span class="pin-pulse-ring" style="border-color: ${pPinFill};"></span>
                                 <span class="pin-target-dot" style="border-color: ${pPinFill};"></span>
                             </div>`;
-                        }).join('')}
+        }).join('')}
                     </div>` : ''}
 
                     <!-- Interactive Disease Inspection Popover (Clean & Dynamic) -->
@@ -706,43 +710,42 @@ function renderResults(data) {
         document.getElementById("repUserId").innerText = _user.full_name || _user.username || "Registered User";
         document.getElementById("repDate").innerText = now.toLocaleString();
         document.getElementById("repLocation").innerText = _user.barangay ? `${_user.barangay}, Bacnotan` : "Bacnotan, La Union";
-        
+
         // Infection Spread Percentage and Categorical Status
         document.getElementById("repScoreValue").innerText = infectionSpreadPct;
-        
-        let primaryDisease = "Healthy";
+
+        let primaryDisease = data.primary_disease || (data.confirmed_diseases && data.confirmed_diseases[0]) || (data.visual_matches && data.visual_matches[0] && data.visual_matches[0].name) || (data.diseases && data.diseases[0]) || (isHealthy ? "Healthy" : "Infected Leaf");
         let matchRating = "High";
         if (data.visual_matches && data.visual_matches.length > 0) {
-            primaryDisease = data.visual_matches[0].name;
             matchRating = parseFloat(data.visual_matches[0].similarity) >= 0.65 ? "High" : "Moderate";
-        } else if (data.diseases && data.diseases.length > 0) {
-            primaryDisease = data.diseases[0];
-            matchRating = "Moderate";
+        } else if (primaryDisease !== "Healthy") {
+            matchRating = "High";
         }
-        
-        const isDiseaseFree = isHealthy || primaryDisease.toLowerCase() === "healthy";
 
-        document.getElementById("repAssessment").innerText = isDiseaseFree 
-            ? "Satisfactory field conditions (0% - minimal infection spread detected)." 
-            : `Disease indicators present with ${infectedArea}% infection spread (${parseFloat(infectedArea) > 15 ? 'High' : 'Low'} infection level).`;
+        const isDiseaseFree = isHealthy && primaryDisease.toLowerCase() === "healthy";
+        const spreadNum = parseFloat(infectedArea) || 0;
+
+        document.getElementById("repAssessment").innerText = (isDiseaseFree && spreadNum === 0)
+            ? "Satisfactory field conditions (0% infection spread detected)."
+            : `Disease indicators present with ${infectedArea}% infection spread (${spreadNum > 15 ? 'High' : 'Low'} infection level).`;
         document.getElementById("repDiseaseName").innerText = primaryDisease;
         document.getElementById("repConfidenceVal").innerText = `${matchRating} Match`;
         document.getElementById("repConfFill").style.width = isDiseaseFree ? "100%" : (matchRating === "High" ? "85%" : "60%");
         document.getElementById("repConfText").innerText = `Categorical match based on visual symptoms.`;
-        
-        document.getElementById("repProfileText").innerText = isDiseaseFree 
-            ? "No significant disease profiles matched. Plant shows normal growth patterns." 
+
+        document.getElementById("repProfileText").innerText = isDiseaseFree
+            ? "No significant disease profiles matched. Plant shows normal growth patterns."
             : `Visual characteristics match known profiles for ${primaryDisease}.`;
-            
+
         document.getElementById("repVisId").innerText = Date.now().toString(36).toUpperCase();
         document.getElementById("repHighlightImg").src = data.highlighted_image || sessionStorage.getItem('previewImageSrc');
-        
+
         document.getElementById("repRec1").innerText = isDiseaseFree ? "Continue regular watering and fertilization schedule." : `Isolate affected areas immediately to prevent ${primaryDisease} spread.`;
         document.getElementById("repRec2").innerText = isDiseaseFree ? "Monitor crop weekly for any sudden changes." : `Apply recommended treatments for ${primaryDisease} within 48 hours.`;
-        
+
         const repSysIdEl = document.getElementById("repSystemId");
         if (repSysIdEl) {
-            repSysIdEl.innerText = `REP-${data.scan_id || Math.floor(Math.random()*10000)}`;
+            repSysIdEl.innerText = `REP-${data.scan_id || Math.floor(Math.random() * 10000)}`;
         }
 
         const opt = {

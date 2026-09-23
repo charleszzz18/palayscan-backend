@@ -128,11 +128,6 @@ def home():
     """Serves the main login page on root access."""
     return send_from_directory(frontend_dir, 'login.html')
 
-@app.route("/<path:path>")
-def serve_frontend(path):
-    """Serves matching frontend assets (images, styles, scripts)."""
-    return send_from_directory(frontend_dir, path)
-
 @app.route("/uploads/<path:filename>")
 def serve_upload(filename):
     """Serves uploaded leaf photos stored in WAMP backend directory."""
@@ -985,6 +980,18 @@ def upload():
     if result.get("is_valid") is False:
         return jsonify(result)
 
+    # Persist highlighted image to disk for historical audit retrieval
+    try:
+        hl_data_str = result.get('highlighted_image', '')
+        if hl_data_str and ',' in hl_data_str:
+            hl_b64 = hl_data_str.split(',', 1)[1]
+            hl_bytes = base64.b64decode(hl_b64)
+            hl_path = os.path.join(uploads_dir, f"highlighted_{unique_name}")
+            with open(hl_path, 'wb') as f_hl:
+                f_hl.write(hl_bytes)
+    except Exception as e_hl:
+        print(f"Failed to persist highlighted image: {e_hl}")
+
     # Save details to scan_records table
     diseases_list = result.get('confirmed_diseases') or result.get('diseases') or []
     scan_id = save_scan_record(
@@ -1393,6 +1400,15 @@ def admin_restore():
     except Exception as e:
         print(f"[Admin Restore Error] {e}", file=sys.stderr)
         return jsonify({"error": f"Database restoration failed: {e}"}), 500
+
+
+@app.route("/<path:path>")
+def serve_frontend(path):
+    """Serves matching frontend assets (images, styles, scripts) when static file exists."""
+    full_path = os.path.join(frontend_dir, path)
+    if os.path.isfile(full_path):
+        return send_from_directory(frontend_dir, path)
+    return jsonify({"error": f"Resource '{path}' not found"}), 404
 
 
 # --- 13. RUN APPLICATION SERVER ---

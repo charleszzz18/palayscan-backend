@@ -32,21 +32,21 @@ function renderPagination(totalItems, currentPage, containerId, clickHandlerName
 
     let html = '';
     html += `<button class="page-btn" ${currentPage === 1 ? 'disabled' : `onclick="${clickHandlerName}(${currentPage - 1})"`}>&laquo; Prev</button>`;
-    
+
     // Show max 5 pages logic could be added, but for simplicity we'll show all or a subset
     let startPage = Math.max(1, currentPage - 2);
     let endPage = Math.min(totalPages, currentPage + 2);
-    
+
     if (startPage > 1) html += `<button class="page-btn" onclick="${clickHandlerName}(1)">1</button>${startPage > 2 ? '<span class="page-dots">...</span>' : ''}`;
-    
+
     for (let i = startPage; i <= endPage; i++) {
         html += `<button class="page-btn ${currentPage === i ? 'active' : ''}" onclick="${clickHandlerName}(${i})">${i}</button>`;
     }
-    
+
     if (endPage < totalPages) html += `${endPage < totalPages - 1 ? '<span class="page-dots">...</span>' : ''}<button class="page-btn" onclick="${clickHandlerName}(${totalPages})">${totalPages}</button>`;
-    
+
     html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : `onclick="${clickHandlerName}(${currentPage + 1})"`}>Next &raquo;</button>`;
-    
+
     container.innerHTML = html;
 }
 
@@ -54,10 +54,10 @@ function renderPagination(totalItems, currentPage, containerId, clickHandlerName
 // Validates that the active session belongs to an authorized administrator.
 // Prevents standard farmers/staff from accessing confidential admin endpoints.
 const token = localStorage.getItem('palayscan_token');
-const user  = JSON.parse(localStorage.getItem('palayscan_user') || 'null');
+const user = JSON.parse(localStorage.getItem('palayscan_user') || 'null');
 
 const isApprovedStaff = user && user.role === 'staff' && (user.staff_status === 'approved' || !user.staff_status);
-const isSuperAdmin    = user && user.role === 'admin';
+const isSuperAdmin = user && user.role === 'admin';
 
 if (!token || !user) {
     window.location.href = 'login.html'; // No credentials? Force login.
@@ -95,43 +95,43 @@ function adminLogout() {
 function switchTab(tabName, el) {
     // Hide all tab screens
     document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
-    
+
     // Remove "active" highlighting from all sidebar menu links
     document.querySelectorAll('.admin-nav-link').forEach(l => l.classList.remove('active'));
-    
+
     // Display the targeted tab panel
     document.getElementById(`tab-${tabName}`).style.display = 'block';
-    
+
     // Add "active" class to the clicked navigation item
     el.classList.add('active');
 
     // Trigger target load functions depending on selected tab
     if (tabName === 'dashboard') loadDashboard();
-    if (tabName === 'heatmap')   loadHeatmapData();
-    if (tabName === 'scans')     loadScans();
-    if (tabName === 'users')     loadUsers();
-    if (tabName === 'diseases')  loadDiseases();
-    if (tabName === 'audit')     loadAuditLogs();
-    if (tabName === 'reports')   initReportsTab();
+    if (tabName === 'heatmap') loadHeatmapData();
+    if (tabName === 'scans') loadScans();
+    if (tabName === 'users') loadUsers();
+    if (tabName === 'diseases') loadDiseases();
+    if (tabName === 'audit') loadAuditLogs();
+    if (tabName === 'reports') initReportsTab();
 }
 
 // --- 3. STATISTICAL METRICS & CHART VISUALIZATION ---
 // Queries stats from database and constructs a disease prevalence chart (Chart.js)
-let diseaseChartInstance  = null; // Container to hold the Chart.js canvas instance
-let genderChartInstance   = null;
-let ageChartInstance      = null;
+let diseaseChartInstance = null; // Container to hold the Chart.js canvas instance
+let genderChartInstance = null;
+let ageChartInstance = null;
 let barangayChartInstance = null;
 
 async function loadDashboard() {
     try {
         // Fetch aggregated numbers from backend
-        const res  = await fetch(`${API_BASE_URL}/admin/stats`, { headers: authHeaders() });
+        const res = await fetch(`${API_BASE_URL}/admin/stats`, { headers: authHeaders() });
         const data = await res.json();
 
         // Bind numerical stats to HTML cards
-        document.getElementById('statUsers').textContent    = data.total_users   ?? 0;
-        document.getElementById('statScans').textContent    = data.total_scans   ?? 0;
-        document.getElementById('statHealthy').textContent  = data.healthy_scans ?? 0;
+        document.getElementById('statUsers').textContent = data.total_users ?? 0;
+        document.getElementById('statScans').textContent = data.total_scans ?? 0;
+        document.getElementById('statHealthy').textContent = data.healthy_scans ?? 0;
         document.getElementById('statDiseased').textContent = data.diseased_scans ?? 0;
 
         const trendUsersEl = document.getElementById('trendUsers');
@@ -200,11 +200,11 @@ async function loadDashboard() {
         });
         const ageLabels = ageKeys.map(a => (!isNaN(a) ? `${a} yrs` : a));
         const ageCounts = ageKeys.map(k => ageData[k]);
-        
+
         // Dynamic curated color palette for individual age bars
         const agePalette = [
-            '#10b981', '#06b6d4', '#3b82f6', '#6366f1', 
-            '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', 
+            '#10b981', '#06b6d4', '#3b82f6', '#6366f1',
+            '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
             '#eab308', '#84cc16', '#14b8a6', '#0ea5e9'
         ];
         const barColors = ageKeys.map((_, i) => agePalette[i % agePalette.length]);
@@ -228,7 +228,7 @@ async function loadDashboard() {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: function(context) {
+                            label: function (context) {
                                 const val = context.parsed.y;
                                 return `${val} farmer${val === 1 ? '' : 's'}`;
                             }
@@ -237,7 +237,7 @@ async function loadDashboard() {
                 },
                 scales: {
                     x: {
-                        title: { display: true, text: 'Precise Age' }
+                        title: { display: true, text: '' }
                     },
                     y: {
                         beginAtZero: true,
@@ -312,7 +312,7 @@ function renderScansTable() {
     tbody.innerHTML = paginatedItems.map(r => `
         <tr>
             <td>#${r.id}</td>
-            <td>${r.created_at.substring(0,16)}</td>
+            <td>${r.created_at.substring(0, 16)}</td>
             <td><strong>${r.user_name}</strong><br><small>${r.user_email || ''}</small></td>
             <td>${r.barangay || '—'}</td>
             <td>${r.detected_diseases || '—'}</td>
@@ -339,9 +339,9 @@ async function loadUsers() {
     const tbody = document.getElementById('usersBody');
     tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;">Loading...</td></tr>';
     try {
-        const res   = await fetch(`${API_BASE_URL}/admin/users`, { headers: authHeaders() });
+        const res = await fetch(`${API_BASE_URL}/admin/users`, { headers: authHeaders() });
         usersData = await res.json();
-        
+
         // Update pending staff banner notification
         const pendingCount = usersData.filter(u => u.role === 'staff' && u.staff_status === 'pending').length;
         const banner = document.getElementById('pendingStaffBanner');
@@ -439,12 +439,12 @@ function renderUsersTable() {
                 <td>${u.age !== undefined && u.age !== null ? u.age : '—'}${u.dob ? `<br><small style="color:#64748b;">(${u.dob})</small>` : ''}</td>
                 <td>${u.barangay || '—'}</td>
                 <td>${u.contact_number || '—'}</td>
-                <td>${u.created_at ? u.created_at.substring(0,10) : '—'}</td>
+                <td>${u.created_at ? u.created_at.substring(0, 10) : '—'}</td>
                 <td>${actionButtons}</td>
             </tr>
         `;
     }).join('');
-    
+
     renderPagination(filteredUsersData.length, usersPage, 'usersPagination', 'goToUsersPage');
 }
 
@@ -494,7 +494,7 @@ async function rejectUser(userId) {
 async function deleteUser(userId) {
     if (!confirm('Are you sure you want to delete this user? This cannot be undone.')) return;
     try {
-        const res  = await fetch(`${API_BASE_URL}/admin/users/${userId}`, {
+        const res = await fetch(`${API_BASE_URL}/admin/users/${userId}`, {
             method: 'DELETE',
             headers: authHeaders()
         });
@@ -517,7 +517,7 @@ async function loadDiseases() {
     const tbody = document.getElementById('diseasesBody');
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:30px;">Loading...</td></tr>';
     try {
-        const res   = await fetch(`${API_BASE_URL}/admin/diseases`, { headers: authHeaders() });
+        const res = await fetch(`${API_BASE_URL}/admin/diseases`, { headers: authHeaders() });
         diseasesData = await res.json();
         filteredDiseasesData = [...diseasesData];
         diseasesPage = 1;
@@ -561,8 +561,8 @@ function renderDiseasesTable() {
 // Add advice entry (POST)
 async function addAdvice() {
     const disease = document.getElementById('newDiseaseSelect').value;
-    const advice  = document.getElementById('newAdviceText').value.trim();
-    const msg     = document.getElementById('diseaseFormMsg');
+    const advice = document.getElementById('newAdviceText').value.trim();
+    const msg = document.getElementById('diseaseFormMsg');
 
     if (!disease || !advice) {
         msg.style.color = '#991b1b';
@@ -571,7 +571,7 @@ async function addAdvice() {
     }
 
     try {
-        const res  = await fetch(`${API_BASE_URL}/admin/diseases`, {
+        const res = await fetch(`${API_BASE_URL}/admin/diseases`, {
             method: 'POST',
             headers: authHeaders(),
             body: JSON.stringify({ disease_name: disease, advice })
@@ -600,7 +600,7 @@ async function editAdvice(id) {
     if (!newText || newText.trim() === currentText) return;
 
     try {
-        const res  = await fetch(`${API_BASE_URL}/admin/diseases/${id}`, {
+        const res = await fetch(`${API_BASE_URL}/admin/diseases/${id}`, {
             method: 'PUT',
             headers: authHeaders(),
             body: JSON.stringify({ advice: newText.trim() })
@@ -620,7 +620,7 @@ async function editAdvice(id) {
 async function deleteAdvice(id) {
     if (!confirm('Delete this advice entry?')) return;
     try {
-        const res  = await fetch(`${API_BASE_URL}/admin/diseases/${id}`, {
+        const res = await fetch(`${API_BASE_URL}/admin/diseases/${id}`, {
             method: 'DELETE',
             headers: authHeaders()
         });
@@ -647,8 +647,8 @@ function downloadCSV() {
         .then(blob => {
             // Programmatically download file using an ephemeral anchor tag
             const link = document.createElement('a');
-            link.href  = URL.createObjectURL(blob);
-            link.download = `PALAYSCAN_Report_${new Date().toISOString().slice(0,10)}.csv`;
+            link.href = URL.createObjectURL(blob);
+            link.download = `PALAYSCAN_Report_${new Date().toISOString().slice(0, 10)}.csv`;
             link.click();
         })
         .catch(err => {
@@ -670,16 +670,16 @@ function filterScans() {
     const diseaseFilter = document.getElementById('scanDiseaseFilter').value;
 
     filteredScansData = scansData.filter(r => {
-        const matchesQuery = 
+        const matchesQuery =
             (r.user_name && r.user_name.toLowerCase().includes(query)) ||
             (r.user_email && r.user_email.toLowerCase().includes(query)) ||
             (r.barangay && r.barangay.toLowerCase().includes(query)) ||
             (r.detected_diseases && r.detected_diseases.toLowerCase().includes(query)) ||
             (r.weather_condition && r.weather_condition.toLowerCase().includes(query));
-            
+
         const rStatus = r.is_healthy ? 'healthy' : 'unhealthy';
         const matchesStatus = !statusFilter || rStatus === statusFilter;
-        
+
         const rDisease = (r.detected_diseases || 'healthy').toLowerCase();
         const matchesDisease = !diseaseFilter || rDisease.includes(diseaseFilter);
 
@@ -694,13 +694,13 @@ function filterUsers() {
     const roleFilter = document.getElementById('userRoleFilter').value;
 
     filteredUsersData = usersData.filter(u => {
-        const matchesQuery = 
+        const matchesQuery =
             (u.full_name && u.full_name.toLowerCase().includes(query)) ||
             (u.username && u.username.toLowerCase().includes(query)) ||
             (u.email && u.email.toLowerCase().includes(query)) ||
             (u.barangay && u.barangay.toLowerCase().includes(query)) ||
             (u.contact_number && u.contact_number.toLowerCase().includes(query));
-            
+
         let matchesRole = true;
         if (roleFilter === 'pending') {
             matchesRole = u.role === 'staff' && u.staff_status === 'pending';
@@ -720,7 +720,7 @@ function filterUsers() {
 
 function filterDiseases() {
     const query = document.getElementById('diseaseSearch').value.toLowerCase();
-    filteredDiseasesData = diseasesData.filter(d => 
+    filteredDiseasesData = diseasesData.filter(d =>
         (d.disease_name && d.disease_name.toLowerCase().includes(query)) ||
         (d.advice && d.advice.toLowerCase().includes(query))
     );
@@ -731,22 +731,22 @@ function filterDiseases() {
 // --- MOBILE ANIMATED TAB NAVIGATION ---
 document.addEventListener("DOMContentLoaded", () => {
     const tabs = document.querySelectorAll("#mobile-nav-container .tab");
-    
+
     tabs.forEach(clickedTab => {
         clickedTab.addEventListener('click', () => {
             if (clickedTab.classList.contains("active")) return;
-            
+
             // Remove active from all tabs
             tabs.forEach(tab => {
                 tab.classList.remove('active');
             });
             // Add active to clicked
             clickedTab.classList.add('active');
-            
+
             // Trigger the existing switchTab logic
             const tabId = clickedTab.getAttribute("data-target-tab");
             const realNavLink = document.querySelector(`.admin-nav-link[data-tab="${tabId}"]`);
-            if(realNavLink) {
+            if (realNavLink) {
                 switchTab(tabId, realNavLink);
             }
         });
@@ -766,7 +766,7 @@ async function loadHeatmapData() {
         const res = await fetch(`${API_BASE_URL}/admin/heatmap-data`, { headers: authHeaders() });
         if (!res.ok) throw new Error('Failed to load heatmap data');
         rawHeatmapData = await res.json();
-        
+
         populateBarangayDropdowns();
         updateHeatmapMetrics();
         initOrUpdateMap();
@@ -958,8 +958,8 @@ function renderBarangayTable() {
                 <tr>
                     <td><strong>${b.barangay}</strong></td>
                     <td>${b.total_scans || 0}</td>
-                    <td><strong style="color:${(b.diseased_scans||0)>0 ? '#dc2626' : '#64748b'};">${b.diseased_scans || 0}</strong></td>
-                    <td><strong style="color:${(b.healthy_scans||0)>0 ? '#16a34a' : '#64748b'};">${b.healthy_scans || 0}</strong></td>
+                    <td><strong style="color:${(b.diseased_scans || 0) > 0 ? '#dc2626' : '#64748b'};">${b.diseased_scans || 0}</strong></td>
+                    <td><strong style="color:${(b.healthy_scans || 0) > 0 ? '#16a34a' : '#64748b'};">${b.healthy_scans || 0}</strong></td>
                     <td>${b.top_disease || 'None'}</td>
                     <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;background:${style.fillColor}20;color:${style.color};border:1px solid ${style.color};">${style.label}</span></td>
                     <td>
@@ -1157,7 +1157,7 @@ async function openScanModal(scanId) {
 
             <!-- Context Info -->
             <div style="display:flex; gap:16px; flex-wrap:wrap; background:#f1f5f9; border-radius:10px; padding:10px 16px; margin-bottom:18px; font-size:0.85rem; color:#475569;">
-                <span>📅 <strong>Date:</strong> ${scan.created_at ? scan.created_at.substring(0,19).replace('T',' ') : '—'}</span>
+                <span>📅 <strong>Date:</strong> ${scan.created_at ? scan.created_at.substring(0, 19).replace('T', ' ') : '—'}</span>
                 <span>☀️ <strong>Weather:</strong> ${scan.weather_condition || 'Normal'}</span>
             </div>
 
@@ -1193,7 +1193,7 @@ function filterAuditLogs() {
 
     filteredAuditData = auditData.filter(log => {
         const matchesAction = !actionFilter || log.action === actionFilter;
-        const matchesQuery = 
+        const matchesQuery =
             (log.action && log.action.toLowerCase().includes(query)) ||
             (log.username && log.username.toLowerCase().includes(query)) ||
             (log.user_name && log.user_name.toLowerCase().includes(query)) ||
@@ -1439,7 +1439,7 @@ async function openBarangaySummaryModal(barangayName) {
             .map(([disease, count]) => `
                 <div style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid #e2e8f0;text-align:center;">
                     <div style="font-size:0.8rem;color:#64748b;">${disease}</div>
-                    <div style="font-size:1.3rem;font-weight:700;color:${count>0 ? '#dc2626' : '#16a34a'};margin-top:4px;">${count}</div>
+                    <div style="font-size:1.3rem;font-weight:700;color:${count > 0 ? '#dc2626' : '#16a34a'};margin-top:4px;">${count}</div>
                 </div>
             `).join('');
 
@@ -1532,11 +1532,11 @@ function closeChangePasswordModal() {
 async function submitChangePassword(e) {
     e.preventDefault();
     const currentPassword = document.getElementById('currentPasswordInput').value;
-    const newPassword     = document.getElementById('newPasswordInput').value;
+    const newPassword = document.getElementById('newPasswordInput').value;
     const confirmPassword = document.getElementById('confirmPasswordInput').value;
     const errBox = document.getElementById('pwdError');
     const sucBox = document.getElementById('pwdSuccess');
-    const btn    = document.getElementById('savePasswordBtn');
+    const btn = document.getElementById('savePasswordBtn');
 
     if (errBox) errBox.style.display = 'none';
     if (sucBox) sucBox.style.display = 'none';

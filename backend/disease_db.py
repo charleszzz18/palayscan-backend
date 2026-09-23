@@ -8,6 +8,7 @@
 
 import pymysql as mariadb
 import sys
+import os
 import secrets
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -657,6 +658,30 @@ def get_scan_record_by_id(scan_id):
         advice_raw = r[12] or ''
         advice_list = [a.strip() for a in advice_raw.split('|') if a.strip()]
 
+        # Resolve or generate red-highlighted diagnostic image
+        highlighted_url = None
+        if r[11]:
+            hl_name = f"highlighted_{r[11]}"
+            backend_uploads = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+            hl_path = os.path.join(backend_uploads, hl_name)
+            raw_path = os.path.join(backend_uploads, r[11])
+            if os.path.exists(hl_path):
+                highlighted_url = f"/uploads/{hl_name}"
+            elif os.path.exists(raw_path):
+                try:
+                    import cv2
+                    from color_analysis import analyze_color
+                    img = cv2.imread(raw_path)
+                    if img is not None:
+                        _, _, um, _, _ = analyze_color(img)
+                        over = img.copy()
+                        over[um > 0] = [0, 0, 255]
+                        hl = cv2.addWeighted(img, 0.6, over, 0.4, 0)
+                        cv2.imwrite(hl_path, hl)
+                        highlighted_url = f"/uploads/{hl_name}"
+                except Exception as hl_err:
+                    print(f"[DB] Auto-generate highlighted image failed: {hl_err}", file=sys.stderr)
+
         return {
             'id': r[0], 'user_name': r[1] or 'Unknown', 'username': r[2] or '',
             'user_email': r[3] or '', 'barangay': r[4] or '', 'detected_diseases': r[5],
@@ -668,6 +693,7 @@ def get_scan_record_by_id(scan_id):
             'created_at': str(r[10]),
             'image_filename': r[11] or '',
             'image_url': f"/uploads/{r[11]}" if r[11] else None,
+            'highlighted_image_url': highlighted_url or (f"/uploads/{r[11]}" if r[11] else None),
             'advice': advice_list
         }
     except Exception as e:
