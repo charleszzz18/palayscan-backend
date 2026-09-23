@@ -31,7 +31,7 @@ from disease_db import (
     get_advice, filter_diseases_by_weather,
     # User Account Auth Functions
     check_username_exists, check_email_exists, create_user, verify_password, create_session,
-    get_user_by_token, delete_session,
+    get_user_by_token, delete_session, update_user_password, verify_user_password_by_id,
     # Scan Logs
     save_scan_record, get_scan_record_by_id,
     # Admin Stats & Queries
@@ -298,6 +298,37 @@ def logout():
 def me():
     """Profile retrieval route to check logged-in status."""
     return jsonify({"user": request.current_user})
+
+
+@app.route("/change-password", methods=["POST"])
+@require_auth
+def change_password():
+    """Securely updates password for the authenticated user or admin."""
+    data = request.get_json() or {}
+    current_password = data.get("current_password") or ""
+    new_password     = data.get("new_password") or ""
+
+    if not current_password or not new_password:
+        return jsonify({"error": "Current password and new password are required."}), 400
+
+    if len(new_password) < 6:
+        return jsonify({"error": "New password must be at least 6 characters long."}), 400
+
+    user_id = request.current_user['id']
+
+    # Verify current password
+    if not verify_user_password_by_id(user_id, current_password):
+        return jsonify({"error": "Incorrect current password."}), 400
+
+    # Save new hashed password
+    if not update_user_password(user_id, new_password):
+        return jsonify({"error": "Failed to update password. Please try again."}), 500
+
+    log_audit("PASSWORD_CHANGE", f"User '{request.current_user['username']}' updated their password",
+              user_id=user_id, username=request.current_user['username'],
+              role=request.current_user.get('role'), ip_address=request.remote_addr)
+
+    return jsonify({"message": "Password updated successfully!"})
 
 
 # --- 5. ENCYCLOPEDIA & METRIC RETRIEVAL ROUTES ---

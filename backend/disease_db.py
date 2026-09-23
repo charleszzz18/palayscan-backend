@@ -337,6 +337,39 @@ def verify_password(identifier, password):
         return user
     return None
 
+def verify_user_password_by_id(user_id, password):
+    """Checks whether the provided password matches the user's current password hash."""
+    if not user_id or not password:
+        return False
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT password FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return False
+        return check_password_hash(row[0], password)
+    except Exception as e:
+        print(f"[DB] verify_user_password_by_id error: {e}", file=sys.stderr)
+        return False
+
+def update_user_password(user_id, new_password):
+    """Hashes and updates user password in MariaDB/MySQL."""
+    if not user_id or not new_password:
+        return False
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        hashed = generate_password_hash(new_password)
+        cursor.execute("UPDATE users SET password = %s WHERE id = %s", (hashed, user_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] update_user_password error: {e}", file=sys.stderr)
+        return False
+
 def create_session(user_id):
     """Generates a secure hex session token valid for 7 days."""
     try:

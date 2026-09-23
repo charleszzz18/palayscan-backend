@@ -1509,3 +1509,92 @@ function closeBarangayModal() {
     if (modal) modal.style.display = 'none';
 }
 
+// --- CHANGE PASSWORD MODAL LOGIC ---
+function openChangePasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        const form = document.getElementById('changePasswordForm');
+        if (form) form.reset();
+        const err = document.getElementById('pwdError');
+        const suc = document.getElementById('pwdSuccess');
+        if (err) err.style.display = 'none';
+        if (suc) suc.style.display = 'none';
+        setTimeout(() => document.getElementById('currentPasswordInput')?.focus(), 100);
+    }
+}
+
+function closeChangePasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitChangePassword(e) {
+    e.preventDefault();
+    const currentPassword = document.getElementById('currentPasswordInput').value;
+    const newPassword     = document.getElementById('newPasswordInput').value;
+    const confirmPassword = document.getElementById('confirmPasswordInput').value;
+    const errBox = document.getElementById('pwdError');
+    const sucBox = document.getElementById('pwdSuccess');
+    const btn    = document.getElementById('savePasswordBtn');
+
+    if (errBox) errBox.style.display = 'none';
+    if (sucBox) sucBox.style.display = 'none';
+
+    if (newPassword !== confirmPassword) {
+        if (errBox) {
+            errBox.textContent = 'New passwords do not match. Please verify.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+
+    if (newPassword.length < 6) {
+        if (errBox) {
+            errBox.textContent = 'New password must be at least 6 characters.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/change-password`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to update password.');
+        }
+
+        if (sucBox) {
+            sucBox.textContent = 'Password changed successfully! You can use your new password next time you sign in.';
+            sucBox.style.display = 'block';
+        }
+        const form = document.getElementById('changePasswordForm');
+        if (form) form.reset();
+
+        setTimeout(() => {
+            closeChangePasswordModal();
+        }, 2200);
+
+    } catch (err) {
+        if (errBox) {
+            errBox.textContent = err.message;
+            errBox.style.display = 'block';
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Update Password';
+    }
+}
+
+
