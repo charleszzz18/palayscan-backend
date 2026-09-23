@@ -69,10 +69,15 @@
     <!-- Formal PDF Report Template (Hidden by default, used by html2pdf) -->
     <div id="pdfReportTemplate" style="display: none;">
         <div class="report-header">
-            <div class="report-logo">🌾</div>
-            <div class="report-title-group">
-                <h2>OFFICIAL RICE CROP</h2>
-                <h2>HEALTH ANALYSIS REPORT</h2>
+            <div class="report-header-left">
+                <div class="report-logo">🌾</div>
+                <div class="report-title-group">
+                    <h2>OFFICIAL RICE CROP</h2>
+                    <h2>HEALTH ANALYSIS REPORT</h2>
+                </div>
+            </div>
+            <div class="report-header-right">
+                <div class="stamp-circle">🌾<br>VERIFIED</div>
             </div>
         </div>
 
@@ -142,7 +147,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js?v=4')
+                navigator.serviceWorker.register('sw.js?v=5')
                     .then(registration => {
                         registration.update();
                         console.log('SW registered successfully');
