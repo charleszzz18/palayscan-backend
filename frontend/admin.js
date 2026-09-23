@@ -767,10 +767,39 @@ let is3DPerspectiveActive = true;
 
 // Strict Geographic Bounding Box for Municipality of Bacnotan, La Union
 const BACNOTAN_BOUNDS = [
-    [120.2900, 16.6500], // Southwest Coordinates [lng, lat]
-    [120.4500, 16.8350]  // Northeast Coordinates [lng, lat]
+    [120.3000, 16.6800], // Southwest Coordinates [lng, lat]
+    [120.4400, 16.8100]  // Northeast Coordinates [lng, lat]
 ];
 const BACNOTAN_CENTER = [120.3650, 16.7450]; // [lng, lat]
+
+// High-Precision Territorial Boundary Hole Ring for Bacnotan, La Union
+const BACNOTAN_PERIMETER_HOLE = [
+    [120.42691, 16.74879],
+    [120.42691, 16.73335],
+    [120.42249, 16.71843],
+    [120.39958, 16.71504],
+    [120.39366, 16.70385],
+    [120.38194, 16.69773],
+    [120.36886, 16.69456],
+    [120.35576, 16.69755],
+    [120.34292, 16.69918],
+    [120.33159, 16.70509],
+    [120.32234, 16.71346],
+    [120.31844, 16.72471],
+    [120.31525, 16.73549],
+    [120.31525, 16.74665],
+    [120.31844, 16.75743],
+    [120.32461, 16.76709],
+    [120.32323, 16.78689],
+    [120.33766, 16.79443],
+    [120.35376, 16.79834],
+    [120.36828, 16.78357],
+    [120.3828, 16.78629],
+    [120.39503, 16.7799],
+    [120.40502, 16.77087],
+    [120.40575, 16.75743],
+    [120.42691, 16.74879]
+];
 
 async function loadHeatmapData() {
     try {
@@ -858,12 +887,12 @@ function initOrUpdateMap() {
                 ]
             },
             center: BACNOTAN_CENTER,
-            zoom: 12.8,
+            zoom: 13.0,
             pitch: 52, // 3D Camera tilt
             bearing: -15, // Aligned with Bacnotan coastline and valley
             maxBounds: BACNOTAN_BOUNDS, // Strictly lock camera to Bacnotan
             maxBoundsViscosity: 1.0, // Hard boundary lock preventing panning away
-            minZoom: 12.0, // Cannot zoom out into whole province
+            minZoom: 12.6, // Strictly prevents zooming out to see the Philippines or the world
             maxZoom: 17.5
         });
 
@@ -886,6 +915,60 @@ function initOrUpdateMap() {
 
 function setup3DLayers() {
     if (!map3dInstance || map3dInstance.getSource('barangay-3d-source')) return;
+
+    // 0. World Mask with Cutout for Bacnotan (Completely hides the outside world)
+    const worldOuterRing = [
+        [-180, -85],
+        [180, -85],
+        [180, 85],
+        [-180, 85],
+        [-180, -85]
+    ];
+
+    map3dInstance.addSource('bacnotan-boundary-mask', {
+        type: 'geojson',
+        data: {
+            type: 'Feature',
+            geometry: {
+                type: 'Polygon',
+                coordinates: [worldOuterRing, BACNOTAN_PERIMETER_HOLE]
+            }
+        }
+    });
+
+    // Dark sleek mask covering everything outside Bacnotan
+    map3dInstance.addLayer({
+        id: 'bacnotan-world-mask-fill',
+        type: 'fill',
+        source: 'bacnotan-boundary-mask',
+        paint: {
+            'fill-color': '#0f172a',
+            'fill-opacity': 0.95
+        }
+    });
+
+    // Glowing Municipal Perimeter Boundary
+    map3dInstance.addSource('bacnotan-perimeter-line', {
+        type: 'geojson',
+        data: {
+            type: 'Feature',
+            geometry: {
+                type: 'LineString',
+                coordinates: BACNOTAN_PERIMETER_HOLE
+            }
+        }
+    });
+
+    map3dInstance.addLayer({
+        id: 'bacnotan-perimeter-glow',
+        type: 'line',
+        source: 'bacnotan-perimeter-line',
+        paint: {
+            'line-color': '#22c55e',
+            'line-width': 3.5,
+            'line-opacity': 0.95
+        }
+    });
 
     // 1. Add GeoJSON source for 3D polygon pillars
     map3dInstance.addSource('barangay-3d-source', {
