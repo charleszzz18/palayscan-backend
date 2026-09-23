@@ -1075,9 +1075,17 @@ function renderHeatmapMarkers() {
 
         if (diseaseFilter) {
             const counts = d.disease_counts || d.diseases || {};
-            const matchedKey = Object.keys(counts).find(k => k.toLowerCase() === diseaseFilter);
-            targetCount = matchedKey ? counts[matchedKey] : 0;
+            const matchedKey = Object.keys(counts).find(k => {
+                const kLower = k.toLowerCase();
+                return kLower === diseaseFilter || kLower.includes(diseaseFilter) || diseaseFilter.includes(kLower);
+            });
+            targetCount = matchedKey ? (counts[matchedKey] || 0) : 0;
             targetDiseased = targetCount;
+
+            // When a specific target disease is selected, only show barangays with that disease!
+            if (targetDiseased <= 0) {
+                return;
+            }
         }
 
         const style = getConcentrationStyle(targetCount, targetDiseased);
@@ -1202,7 +1210,12 @@ function showBarangay3DPopup(props, coords) {
 }
 
 function filterHeatmapMarkers() {
+    if (map3dActivePopup) {
+        map3dActivePopup.remove();
+        map3dActivePopup = null;
+    }
     renderHeatmapMarkers();
+    renderBarangayTable();
 }
 
 function toggle3DView() {
@@ -1238,7 +1251,7 @@ function reset3DView() {
     if (!map3dInstance) return;
     map3dInstance.flyTo({
         center: BACNOTAN_CENTER,
-        zoom: 12.8,
+        zoom: 13.0,
         pitch: 52,
         bearing: -15,
         essential: true,
@@ -1301,35 +1314,50 @@ function renderBarangayTable() {
     }
 
     const query = (document.getElementById('barangayTableSearch')?.value || '').toLowerCase();
+    const diseaseFilter = (document.getElementById('heatmapDiseaseFilter')?.value || '').trim().toLowerCase();
 
-    const rows = rawHeatmapData
+    let list = rawHeatmapData
         .filter(b => b.barangay && b.barangay.toLowerCase() !== 'bacnotan' && b.barangay.toLowerCase() !== 'unknown')
-        .filter(b => !query || b.barangay.toLowerCase().includes(query))
-        .sort((a, b) => {
-            const disA = (a.unhealthy_scans !== undefined ? a.unhealthy_scans : a.diseased_scans) || 0;
-            const disB = (b.unhealthy_scans !== undefined ? b.unhealthy_scans : b.diseased_scans) || 0;
-            return disB - disA;
-        })
-        .map(b => {
-            const diseased = (b.unhealthy_scans !== undefined ? b.unhealthy_scans : b.diseased_scans) || 0;
-            const topDisease = b.top_disease || b.most_common_disease || 'None';
-            const style = getConcentrationStyle(b.total_scans || 0, diseased);
-            return `
-                <tr>
-                    <td><strong>${b.barangay}</strong></td>
-                    <td>${b.total_scans || 0}</td>
-                    <td><strong style="color:${diseased > 0 ? '#dc2626' : '#64748b'};">${diseased}</strong></td>
-                    <td><strong style="color:${(b.healthy_scans || 0) > 0 ? '#16a34a' : '#64748b'};">${b.healthy_scans || 0}</strong></td>
-                    <td>${topDisease}</td>
-                    <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;background:${style.fillColor}20;color:${style.color};border:1px solid ${style.color};">${style.label}</span></td>
-                    <td>
-                        <button onclick="openBarangaySummaryModal('${b.barangay}')" style="padding:4px 10px;background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600;">📋 Report</button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        .filter(b => !query || b.barangay.toLowerCase().includes(query));
 
-    tbody.innerHTML = rows || '<tr><td colspan="7" style="text-align:center;padding:20px;color:#94a3b8;">No matching barangay found.</td></tr>';
+    if (diseaseFilter) {
+        list = list.filter(b => {
+            const counts = b.disease_counts || b.diseases || {};
+            const matchedKey = Object.keys(counts).find(k => {
+                const kLower = k.toLowerCase();
+                return kLower === diseaseFilter || kLower.includes(diseaseFilter) || diseaseFilter.includes(kLower);
+            });
+            const count = matchedKey ? (counts[matchedKey] || 0) : 0;
+            return count > 0;
+        });
+    }
+
+    list.sort((a, b) => {
+        const disA = (a.unhealthy_scans !== undefined ? a.unhealthy_scans : a.diseased_scans) || 0;
+        const disB = (b.unhealthy_scans !== undefined ? b.unhealthy_scans : b.diseased_scans) || 0;
+        return disB - disA;
+    });
+
+    const rows = list.map(b => {
+        const diseased = (b.unhealthy_scans !== undefined ? b.unhealthy_scans : b.diseased_scans) || 0;
+        const topDisease = b.top_disease || b.most_common_disease || 'None';
+        const style = getConcentrationStyle(b.total_scans || 0, diseased);
+        return `
+            <tr>
+                <td><strong>${b.barangay}</strong></td>
+                <td>${b.total_scans || 0}</td>
+                <td><strong style="color:${diseased > 0 ? '#dc2626' : '#64748b'};">${diseased}</strong></td>
+                <td><strong style="color:${(b.healthy_scans || 0) > 0 ? '#16a34a' : '#64748b'};">${b.healthy_scans || 0}</strong></td>
+                <td>${topDisease}</td>
+                <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;background:${style.fillColor}20;color:${style.color};border:1px solid ${style.color};">${style.label}</span></td>
+                <td>
+                    <button onclick="openBarangaySummaryModal('${b.barangay}')" style="padding:4px 10px;background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600;">📋 Report</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    tbody.innerHTML = rows || `<tr><td colspan="7" style="text-align:center;padding:20px;color:#94a3b8;">${diseaseFilter ? 'No barangays detected with ' + escapeHtml(diseaseFilter) + '.' : 'No matching barangay found.'}</td></tr>`;
 }
 
 function filterBarangayTable() {
