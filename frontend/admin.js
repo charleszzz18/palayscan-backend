@@ -1456,25 +1456,30 @@ async function openBarangaySummaryModal(barangayName) {
             .map(([disease, count]) => {
                 const diseaseImages = samples[disease] || [];
                 const imagesHtml = diseaseImages.length ? `
-                    <div style="display:flex;gap:10px;justify-content:center;align-items:center;margin-top:10px;flex-wrap:wrap;">
+                    <div style="display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;max-height:148px;overflow-y:auto;padding:6px;background:#f8fafc;border-radius:10px;border:1px solid #f1f5f9;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent;">
                         ${diseaseImages.map(img => {
                             const fullUrl = resolveMediaUrl(img.image_url);
                             return `
-                                <div style="position:relative;cursor:pointer;display:inline-block;" onclick="openEnlargedImage('${fullUrl}', '📍 ${escapeHtml(brgy)} - ${escapeHtml(disease)} (Scan #${img.scan_id})')" title="Tap to view enlarged scan">
-                                    <img src="${fullUrl}" alt="${escapeHtml(disease)}" style="width:68px;height:68px;object-fit:cover;border-radius:10px;border:2.5px solid #cbd5e1;box-shadow:0 3px 8px rgba(0,0,0,0.12);transition:transform 0.18s,border-color 0.18s;background:#f8fafc;" onmouseover="this.style.transform='scale(1.1)';this.style.borderColor='#166534'" onmouseout="this.style.transform='scale(1)';this.style.borderColor='#cbd5e1'" />
-                                    <span style="position:absolute;bottom:3px;right:3px;background:rgba(15,23,42,0.85);color:#fff;font-size:0.6rem;padding:2px 4px;border-radius:4px;line-height:1;">🔍</span>
+                                <div style="position:relative;cursor:pointer;flex-shrink:0;display:inline-block;" onclick="openEnlargedImage('${fullUrl}', '📍 ${escapeHtml(brgy)} - ${escapeHtml(disease)} (Scan #${img.scan_id})')" title="Scan #${img.scan_id} - ${escapeHtml(img.farmer || 'Farmer')} (Tap to enlarge)">
+                                    <img src="${fullUrl}" alt="${escapeHtml(disease)}" style="width:62px;height:62px;object-fit:cover;border-radius:8px;border:2px solid #cbd5e1;box-shadow:0 2px 6px rgba(0,0,0,0.08);transition:transform 0.18s,border-color 0.18s;display:block;background:#fff;" onmouseover="this.style.transform='scale(1.08)';this.style.borderColor='#166534'" onmouseout="this.style.transform='scale(1)';this.style.borderColor='#cbd5e1'" />
+                                    <span style="position:absolute;bottom:2px;right:2px;background:rgba(15,23,42,0.85);color:#fff;font-size:0.55rem;padding:1px 3px;border-radius:3px;line-height:1;">🔍</span>
                                 </div>
                             `;
                         }).join('')}
                     </div>
-                ` : `<div style="font-size:0.75rem;color:#94a3b8;margin-top:6px;">No photo available</div>`;
+                ` : `<div style="font-size:0.75rem;color:#94a3b8;margin-top:6px;padding:8px;background:#f8fafc;border-radius:8px;">No photo available</div>`;
 
                 return `
-                    <div style="background:#fff;padding:16px;border-radius:14px;border:1.5px solid #e2e8f0;text-align:center;box-shadow:0 3px 10px rgba(0,0,0,0.03);min-width:150px;">
-                        <div style="font-size:0.95rem;font-weight:700;color:#1e293b;">${escapeHtml(disease)}</div>
-                        <div style="font-size:1.5rem;font-weight:800;color:${count > 0 ? '#dc2626' : '#16a34a'};margin:2px 0 8px;">${count} <span style="font-size:0.8rem;font-weight:500;color:#64748b;">case${count !== 1 ? 's' : ''}</span></div>
-                        <div style="border-top:1px dashed #e2e8f0;padding-top:8px;">
-                            <span style="font-size:0.75rem;color:#64748b;font-weight:600;display:block;">📸 Scanned Leaf:</span>
+                    <div style="background:#fff;padding:16px;border-radius:14px;border:1.5px solid #e2e8f0;text-align:center;box-shadow:0 3px 10px rgba(0,0,0,0.03);display:flex;flex-direction:column;justify-content:space-between;">
+                        <div>
+                            <div style="font-size:0.95rem;font-weight:700;color:#1e293b;">${escapeHtml(disease)}</div>
+                            <div style="font-size:1.5rem;font-weight:800;color:${count > 0 ? '#dc2626' : '#16a34a'};margin:2px 0 8px;">${count} <span style="font-size:0.8rem;font-weight:500;color:#64748b;">case${count !== 1 ? 's' : ''}</span></div>
+                        </div>
+                        <div style="border-top:1px dashed #e2e8f0;padding-top:8px;margin-top:4px;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:0.72rem;color:#64748b;font-weight:600;">
+                                <span>📸 Scanned Leaves:</span>
+                                ${diseaseImages.length > 0 ? `<span style="background:#e0f2fe;color:#0369a1;padding:1px 6px;border-radius:8px;font-weight:700;">${diseaseImages.length}</span>` : ''}
+                            </div>
                             ${imagesHtml}
                         </div>
                     </div>
@@ -1531,7 +1536,7 @@ async function openBarangaySummaryModal(barangayName) {
 
             <!-- Disease Distribution Breakdown -->
             <h4 style="margin:16px 0 10px 0;color:#1e293b;font-size:0.95rem;">🔬 Disease Occurrence in ${brgy}</h4>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:24px;">
                 ${diseaseBreakdownRows}
             </div>
 

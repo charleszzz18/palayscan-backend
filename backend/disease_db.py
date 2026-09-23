@@ -1021,7 +1021,7 @@ def get_barangay_summary(barangay):
             if img_url:
                 if disease not in disease_samples:
                     disease_samples[disease] = []
-                if len(disease_samples[disease]) < 4:
+                if len(disease_samples[disease]) < 16:
                     disease_samples[disease].append({
                         'scan_id': scan_id,
                         'image_url': img_url,
