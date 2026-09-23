@@ -720,23 +720,25 @@ function renderResults(data) {
             matchRating = "Moderate";
         }
         
-        document.getElementById("repAssessment").innerText = isHealthy 
-            ? "Satisfactory field conditions (0% infection spread detected)." 
+        const isDiseaseFree = isHealthy || primaryDisease.toLowerCase() === "healthy";
+
+        document.getElementById("repAssessment").innerText = isDiseaseFree 
+            ? "Satisfactory field conditions (0% - minimal infection spread detected)." 
             : `Disease indicators present with ${infectedArea}% infection spread (${parseFloat(infectedArea) > 15 ? 'High' : 'Low'} infection level).`;
         document.getElementById("repDiseaseName").innerText = primaryDisease;
         document.getElementById("repConfidenceVal").innerText = `${matchRating} Match`;
-        document.getElementById("repConfFill").style.width = isHealthy ? "100%" : (matchRating === "High" ? "85%" : "60%");
+        document.getElementById("repConfFill").style.width = isDiseaseFree ? "100%" : (matchRating === "High" ? "85%" : "60%");
         document.getElementById("repConfText").innerText = `Categorical match based on visual symptoms.`;
         
-        document.getElementById("repProfileText").innerText = primaryDisease === "Healthy" 
+        document.getElementById("repProfileText").innerText = isDiseaseFree 
             ? "No significant disease profiles matched. Plant shows normal growth patterns." 
             : `Visual characteristics match known profiles for ${primaryDisease}.`;
             
         document.getElementById("repVisId").innerText = Date.now().toString(36).toUpperCase();
         document.getElementById("repHighlightImg").src = data.highlighted_image || sessionStorage.getItem('previewImageSrc');
         
-        document.getElementById("repRec1").innerText = isHealthy ? "Continue regular watering and fertilization schedule." : `Isolate affected areas immediately to prevent ${primaryDisease} spread.`;
-        document.getElementById("repRec2").innerText = isHealthy ? "Monitor crop weekly for any sudden changes." : `Apply recommended treatments for ${primaryDisease} within 48 hours.`;
+        document.getElementById("repRec1").innerText = isDiseaseFree ? "Continue regular watering and fertilization schedule." : `Isolate affected areas immediately to prevent ${primaryDisease} spread.`;
+        document.getElementById("repRec2").innerText = isDiseaseFree ? "Monitor crop weekly for any sudden changes." : `Apply recommended treatments for ${primaryDisease} within 48 hours.`;
         
         const repSysIdEl = document.getElementById("repSystemId");
         if (repSysIdEl) {

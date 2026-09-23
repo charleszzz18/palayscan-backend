@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rice-health-cache-v5'; // Unique name for this version of the cache
+const CACHE_NAME = 'rice-health-cache-v6'; // Unique name for this version of the cache
 const urlsToCache = [ // List of local assets that should be available offline
   '/',
   '/index.html',
