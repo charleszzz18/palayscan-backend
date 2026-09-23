@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PALAYSCAN | Admin Panel</title>
-    <link rel="stylesheet" href="style.css?v=16">
+    <link rel="stylesheet" href="style.css?v=17">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -119,21 +119,31 @@
             </div>
             <div class="admin-chart-card">
                 <h3>🌾 Summary of Scan Results (Top Detected)</h3>
-                <canvas id="diseaseChart" height="100"></canvas>
+                <div class="chart-canvas-wrap">
+                    <canvas id="diseaseChart"></canvas>
+                </div>
             </div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 20px;">
                 <div class="admin-chart-card">
                     <h3>👥 Gender Distribution</h3>
-                    <canvas id="genderChart" height="180"></canvas>
+                    <div class="chart-canvas-wrap" style="height: 260px;">
+                        <canvas id="genderChart"></canvas>
+                    </div>
                 </div>
                 <div class="admin-chart-card">
                     <h3>🎂 Age Demographics (Avg: <span id="avgAgeText">0</span> yrs)</h3>
-                    <canvas id="ageChart" height="180"></canvas>
+                    <div class="chart-canvas-wrap" style="height: 260px;">
+                        <canvas id="ageChart"></canvas>
+                    </div>
                 </div>
             </div>
             <div class="admin-chart-card" style="margin-top: 20px;">
                 <h3>📍 Number of Users per Barangay</h3>
-                <canvas id="barangayChart" height="100"></canvas>
+                <div style="max-height: 480px; overflow-y: auto; scrollbar-width: thin; padding-right: 4px;">
+                    <div id="barangayChartContainer" style="position: relative; height: 320px; width: 100%;">
+                        <canvas id="barangayChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -335,7 +345,7 @@
                 <button onclick="document.getElementById('userRoleFilter').value='pending';filterUsers();" style="background:#b45309;color:white;border:none;padding:6px 14px;border-radius:6px;font-size:0.8rem;cursor:pointer;font-weight:600;">Review Pending</button>
             </div>
             <div class="admin-table-wrap">
-                <table class="admin-table" id="usersTable">
+                <table class="admin-table admin-table-wide" id="usersTable">
                     <thead>
                         <tr>
                             <th>#</th>
@@ -779,6 +789,6 @@
 </div>
 
 <script src="api_config.js"></script>
-<script src="admin.js?v=18"></script>
+<script src="admin.js?v=19"></script>
 </body>
 </html>

@@ -131,17 +131,17 @@ async function loadDashboard() {
         const res = await fetch(`${API_BASE_URL}/admin/stats`, { headers: authHeaders() });
         const data = await res.json();
 
-        // Bind numerical stats to HTML cards
-        document.getElementById('statUsers').textContent = data.total_users ?? 0;
-        document.getElementById('statScans').textContent = data.total_scans ?? 0;
-        document.getElementById('statHealthy').textContent = data.healthy_scans ?? 0;
-        document.getElementById('statDiseased').textContent = data.diseased_scans ?? 0;
+        // Bind numerical stats to HTML cards (Formatted with commas for large numbers)
+        document.getElementById('statUsers').textContent = Number(data.total_users || 0).toLocaleString();
+        document.getElementById('statScans').textContent = Number(data.total_scans || 0).toLocaleString();
+        document.getElementById('statHealthy').textContent = Number(data.healthy_scans || 0).toLocaleString();
+        document.getElementById('statDiseased').textContent = Number(data.diseased_scans || 0).toLocaleString();
 
         const trendUsersEl = document.getElementById('trendUsers');
-        if (trendUsersEl) trendUsersEl.textContent = `+${data.new_users_today ?? 0} New Today`;
+        if (trendUsersEl) trendUsersEl.textContent = `+${Number(data.new_users_today || 0).toLocaleString()} New Today`;
 
         const trendScansEl = document.getElementById('trendScans');
-        if (trendScansEl) trendScansEl.textContent = `+${data.new_scans_today ?? 0} New Today`;
+        if (trendScansEl) trendScansEl.textContent = `+${Number(data.new_scans_today || 0).toLocaleString()} New Today`;
 
         const avgAgeEl = document.getElementById('avgAgeText');
         if (avgAgeEl) avgAgeEl.textContent = data.avg_age ?? 0;
@@ -164,6 +164,7 @@ async function loadDashboard() {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
             }
@@ -187,6 +188,7 @@ async function loadDashboard() {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: { legend: { position: 'bottom' } }
             }
         });
@@ -227,6 +229,7 @@ async function loadDashboard() {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -269,11 +272,19 @@ async function loadDashboard() {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 indexAxis: 'y',
                 plugins: { legend: { display: false } },
                 scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
             }
         });
+
+        // Dynamically adjust height of barangay chart if there are many barangays
+        const bContainer = document.getElementById('barangayChartContainer');
+        if (bContainer) {
+            const calculatedHeight = Math.max(300, (brgyLabels.length || 0) * 26);
+            bContainer.style.height = `${calculatedHeight}px`;
+        }
     } catch (err) {
         console.error('Dashboard load error:', err);
     }
@@ -315,12 +326,17 @@ function renderScansTable() {
     tbody.innerHTML = paginatedItems.map(r => `
         <tr>
             <td>#${r.id}</td>
-            <td>${r.created_at.substring(0, 16)}</td>
-            <td><strong>${r.user_name}</strong><br><small>${r.user_email || ''}</small></td>
-            <td>${r.barangay || '—'}</td>
-            <td>${r.detected_diseases || '—'}</td>
+            <td style="white-space:nowrap;font-size:0.82rem;color:#475569;">${r.created_at.substring(0, 16)}</td>
+            <td>
+                <div class="cell-truncate" style="max-width:180px;" title="${escapeHtml(r.user_name || '')} (${escapeHtml(r.user_email || '')})">
+                    <strong>${escapeHtml(r.user_name || 'Farmer')}</strong>
+                    ${r.user_email ? `<br><small style="color:#64748b;">${escapeHtml(r.user_email)}</small>` : ''}
+                </div>
+            </td>
+            <td><div class="cell-truncate" style="max-width:140px;" title="${escapeHtml(r.barangay || '')}">${escapeHtml(r.barangay || '—')}</div></td>
+            <td><div class="cell-truncate" style="max-width:160px;" title="${escapeHtml(r.detected_diseases || '')}">${escapeHtml(r.detected_diseases || '—')}</div></td>
             <td>${r.is_healthy ? '<span style="color:#16a34a;font-weight:600;">Healthy</span>' : '<span style="color:#dc2626;font-weight:600;">Not Healthy</span>'}</td>
-            <td>${r.weather_condition || '—'}</td>
+            <td>${escapeHtml(r.weather_condition || '—')}</td>
             <td>
                 <div style="display:flex;gap:6px;align-items:center;">
                     <a href="index.html?scan_id=${r.id}" style="padding:5px 10px;background:#166534;color:#fff;border-radius:6px;font-size:0.8rem;text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;" title="Go to scanned image page">
@@ -434,15 +450,20 @@ function renderUsersTable() {
         return `
             <tr>
                 <td>#${u.id}</td>
-                <td><strong>${u.full_name}</strong></td>
-                <td>${u.username ? `<strong>${u.username}</strong>` : (u.email || '—')}${u.username && u.email ? `<br><small style="color:#64748b;">${u.email}</small>` : ''}</td>
+                <td><div class="cell-truncate" style="max-width:160px;" title="${escapeHtml(u.full_name || '')}"><strong>${escapeHtml(u.full_name || '')}</strong></div></td>
+                <td>
+                    <div class="cell-truncate" style="max-width:170px;" title="${escapeHtml(u.username || '')} (${escapeHtml(u.email || '')})">
+                        ${u.username ? `<strong>${escapeHtml(u.username)}</strong>` : (escapeHtml(u.email) || '—')}
+                        ${u.username && u.email ? `<br><small style="color:#64748b;">${escapeHtml(u.email)}</small>` : ''}
+                    </div>
+                </td>
                 <td>${roleBadge}</td>
-                <td>${u.address || '—'}</td>
-                <td>${u.sex || '—'}</td>
-                <td>${u.age !== undefined && u.age !== null ? u.age : '—'}${u.dob ? `<br><small style="color:#64748b;">(${u.dob})</small>` : ''}</td>
-                <td>${u.barangay || '—'}</td>
-                <td>${u.contact_number || '—'}</td>
-                <td>${u.created_at ? u.created_at.substring(0, 10) : '—'}</td>
+                <td><div class="cell-truncate" style="max-width:150px;" title="${escapeHtml(u.address || '')}">${escapeHtml(u.address || '—')}</div></td>
+                <td>${escapeHtml(u.sex || '—')}</td>
+                <td>${u.age !== undefined && u.age !== null ? u.age : '—'}${u.dob ? `<br><small style="color:#64748b;">(${escapeHtml(u.dob)})</small>` : ''}</td>
+                <td><div class="cell-truncate" style="max-width:130px;" title="${escapeHtml(u.barangay || '')}">${escapeHtml(u.barangay || '—')}</div></td>
+                <td>${escapeHtml(u.contact_number || '—')}</td>
+                <td style="white-space:nowrap;">${u.created_at ? u.created_at.substring(0, 10) : '—'}</td>
                 <td>${actionButtons}</td>
             </tr>
         `;
@@ -895,7 +916,7 @@ function updateHeatmapMetrics(diseaseFilter = '') {
     const casesEl = document.getElementById('hmTotalCasesMapped');
     const casesLabel = document.getElementById('hmTotalCasesMappedLabel');
     if (casesEl) {
-        casesEl.textContent = totalCases;
+        casesEl.textContent = Number(totalCases || 0).toLocaleString();
         if (casesLabel) {
             casesLabel.textContent = filter ? `Total ${selectedText} Cases` : 'Total Scans Mapped';
         }
@@ -2071,32 +2092,32 @@ async function openBarangaySummaryModal(barangayName) {
             <!-- Top Stat Cards -->
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:20px;">
                 <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;padding:14px;border-radius:12px;text-align:center;">
-                    <span style="font-size:1.6rem;font-weight:700;color:#166534;">${totalScans}</span>
+                    <span style="font-size:1.6rem;font-weight:700;color:#166534;">${Number(totalScans || 0).toLocaleString()}</span>
                     <p style="margin:2px 0 0;font-size:0.8rem;color:#15803d;font-weight:500;">Total Scans</p>
                 </div>
                 <div style="background:#fef2f2;border:1.5px solid #fecaca;padding:14px;border-radius:12px;text-align:center;">
-                    <span style="font-size:1.6rem;font-weight:700;color:#991b1b;">${diseasedScans}</span>
+                    <span style="font-size:1.6rem;font-weight:700;color:#991b1b;">${Number(diseasedScans || 0).toLocaleString()}</span>
                     <p style="margin:2px 0 0;font-size:0.8rem;color:#b91c1c;font-weight:500;">Unhealthy Cases</p>
                 </div>
                 <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;padding:14px;border-radius:12px;text-align:center;">
-                    <span style="font-size:1.6rem;font-weight:700;color:#166534;">${healthyScans}</span>
+                    <span style="font-size:1.6rem;font-weight:700;color:#166534;">${Number(healthyScans || 0).toLocaleString()}</span>
                     <p style="margin:2px 0 0;font-size:0.8rem;color:#15803d;font-weight:500;">Healthy Cases</p>
                 </div>
                 <div style="background:#fffbeb;border:1.5px solid #fde68a;padding:14px;border-radius:12px;text-align:center;">
-                    <span style="font-size:1.1rem;font-weight:700;color:#92400e;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${primaryDisease}</span>
+                    <span style="font-size:1.1rem;font-weight:700;color:#92400e;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(primaryDisease)}</span>
                     <p style="margin:2px 0 0;font-size:0.8rem;color:#b45309;font-weight:500;">Primary Disease</p>
                 </div>
             </div>
 
             <!-- Disease Distribution Breakdown -->
-            <h4 style="margin:16px 0 10px 0;color:#1e293b;font-size:0.95rem;">🔬 Disease Occurrence in ${brgy}</h4>
+            <h4 style="margin:16px 0 10px 0;color:#1e293b;font-size:0.95rem;">🔬 Disease Occurrence in ${escapeHtml(brgy)}</h4>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:24px;">
                 ${diseaseBreakdownRows}
             </div>
 
             <!-- Scan History in Barangay -->
-            <h4 style="margin:16px 0 10px 0;color:#1e293b;font-size:0.95rem;">📜 Reported Scans in ${brgy}</h4>
-            <div class="admin-table-wrap">
+            <h4 style="margin:16px 0 10px 0;color:#1e293b;font-size:0.95rem;">📜 Reported Scans in ${escapeHtml(brgy)}</h4>
+            <div class="admin-table-wrap" style="max-height: 360px; overflow-y: auto;">
                 <table class="admin-table">
                     <thead>
                         <tr>

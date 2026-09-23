@@ -1741,6 +1741,11 @@ main {
     gap: 16px;
 }
 
+.auth-wrapper:has(.auth-card-wide),
+.auth-wrapper.auth-wide {
+    max-width: 640px;
+}
+
 .auth-card {
     width: 100%;
     background: var(--clay-surface);
@@ -1752,7 +1757,7 @@ main {
 }
 
 .auth-card-wide {
-    max-width: 600px;
+    max-width: 640px;
 }
 
 .auth-brand {
@@ -1874,9 +1879,10 @@ main {
     gap: 16px;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
     .auth-field-row {
         flex-direction: column;
+        gap: 12px;
     }
 }
 
@@ -2145,10 +2151,11 @@ main {
 
 .admin-stat-info span {
     display: block;
-    font-size: 2rem;
+    font-size: clamp(1.35rem, 2.2vw, 2rem);
     font-weight: 800;
     color: var(--slate-900);
-    line-height: 1;
+    line-height: 1.1;
+    white-space: nowrap;
 }
 
 .admin-stat-info p {
@@ -2173,6 +2180,20 @@ main {
     margin-bottom: 20px;
 }
 
+/* Responsive Lock for Chart.js Canvases to prevent infinite height expansion */
+.chart-canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 300px;
+}
+
+.chart-scroll-wrap {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
 .admin-table-wrap {
     background: var(--clay-surface);
     border-radius: 20px;
@@ -2181,7 +2202,9 @@ main {
     width: 100%;
     max-width: 100%;
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
+    max-height: 560px;
+    position: relative;
     /* Custom Scrollbar for the table wrapper so users know they can scroll */
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 #f1f5f9;
@@ -2189,6 +2212,7 @@ main {
 
 .admin-table-wrap::-webkit-scrollbar {
     height: 10px;
+    width: 8px;
 }
 
 .admin-table-wrap::-webkit-scrollbar-track {
@@ -2207,13 +2231,20 @@ main {
 
 .admin-table {
     width: 100%;
-    min-width: 800px; /* Force horizontal scrolling on mobile */
+    min-width: 820px; /* Force horizontal scrolling on mobile/tablet */
     border-collapse: collapse;
     font-size: 0.875rem;
 }
 
+.admin-table-wide {
+    min-width: 1080px !important;
+}
+
 .admin-table th {
-    background: rgba(240, 253, 244, 0.8);
+    background: #f0fdf4;
+    position: sticky;
+    top: 0;
+    z-index: 5;
     padding: 14px 16px;
     text-align: left;
     font-size: 0.75rem;
@@ -2221,8 +2252,18 @@ main {
     color: #166534;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-bottom: 2px solid rgba(34, 197, 94, 0.2);
+    border-bottom: 2px solid rgba(34, 197, 94, 0.25);
     white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+}
+
+/* Text Truncation for Table Cells with Huge Data */
+.admin-table td.cell-truncate,
+.admin-table td .cell-truncate {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .admin-table td {
@@ -3551,4 +3592,136 @@ main {
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(22, 101, 52, 0.35) !important;
     filter: brightness(1.08);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TABLET RESPONSIVE DESIGN (769px to 1024px)
+   Balances layout for iPad, Galaxy Tab, and Surface screens
+   ═══════════════════════════════════════════════════════════════ */
+@media (min-width: 769px) and (max-width: 1024px) {
+    /* 1. Admin Sidebar & Main Content on Tablet */
+    .admin-sidebar {
+        width: 215px !important;
+    }
+
+    .admin-brand {
+        padding: 20px 16px !important;
+        gap: 10px !important;
+    }
+    .admin-brand span {
+        font-size: 26px !important;
+    }
+    .admin-brand h2 {
+        font-size: 1.05rem !important;
+    }
+    .admin-brand p {
+        font-size: 0.65rem !important;
+    }
+
+    .admin-nav {
+        padding: 14px 10px !important;
+        gap: 4px !important;
+    }
+    .admin-nav-link {
+        padding: 10px 12px !important;
+        font-size: 0.82rem !important;
+        border-radius: 10px !important;
+    }
+
+    .admin-sidebar-footer {
+        padding: 16px 14px !important;
+    }
+    .admin-sidebar-footer p {
+        font-size: 0.75rem !important;
+    }
+    .admin-logout-btn {
+        padding: 8px 10px !important;
+        font-size: 0.8rem !important;
+    }
+
+    .admin-main {
+        padding: 24px 20px !important;
+    }
+
+    .admin-page-title {
+        font-size: 1.5rem !important;
+        margin-bottom: 20px !important;
+    }
+
+    /* 2. Stat Cards Grid: Balanced 2x2 on Tablet */
+    .admin-stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 14px !important;
+        margin-bottom: 22px !important;
+    }
+
+    .admin-stat-card {
+        padding: 18px 16px !important;
+        gap: 12px !important;
+    }
+
+    .admin-stat-icon {
+        font-size: 1.6rem !important;
+    }
+
+    .admin-stat-info span {
+        font-size: 1.5rem !important;
+    }
+    .admin-stat-info p {
+        font-size: 0.75rem !important;
+    }
+
+    /* 3. Charts & Canvas on Tablet */
+    .admin-chart-card {
+        padding: 22px 18px !important;
+    }
+
+    .chart-canvas-wrap {
+        height: 270px !important;
+    }
+
+    /* 4. Heat Map on Tablet */
+    #barangayHeatmap {
+        height: 460px !important;
+    }
+
+    .heatmap-scope-badge {
+        padding: 5px 10px !important;
+        top: 10px !important;
+        left: 10px !important;
+    }
+
+    .map-3d-controls {
+        top: 10px !important;
+        right: 10px !important;
+        gap: 6px !important;
+    }
+
+    /* 5. Filters on Tablet */
+    .admin-filter-container {
+        gap: 10px !important;
+        flex-wrap: wrap !important;
+    }
+
+    /* 6. Tables on Tablet */
+    .admin-table th,
+    .admin-table td {
+        padding: 11px 13px !important;
+        font-size: 0.82rem !important;
+    }
+
+    /* 7. Main Scanner App on Tablet */
+    main {
+        max-width: 740px !important;
+        padding: 0 16px !important;
+    }
+
+    /* 8. Auth Cards on Tablet */
+    .auth-wrapper {
+        max-width: 520px !important;
+    }
+    .auth-wrapper:has(.auth-card-wide),
+    .auth-wrapper.auth-wide {
+        max-width: 620px !important;
+    }
 }
