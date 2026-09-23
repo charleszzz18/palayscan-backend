@@ -141,13 +141,13 @@
     </div>
     <!-- Core Logic Scripts -->
     <script src="api_config.js"></script>
-    <script src="app.js"></script> <!-- Main frontend engine orchestrating analysis and UI updates -->
+    <script src="app.js?v=8"></script> <!-- Main frontend engine orchestrating analysis and UI updates -->
     
     <!-- Service Worker Registration for PWA Features (Offline Mode) -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js?v=7')
+                navigator.serviceWorker.register('sw.js?v=8')
                     .then(registration => {
                         registration.update();
                         console.log('SW registered successfully');

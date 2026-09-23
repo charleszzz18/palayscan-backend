@@ -1010,8 +1010,9 @@ def upload():
               user_id=current_user.get('id'), username=current_user.get('username'),
               role=current_user.get('role'), ip_address=request.remote_addr)
 
-    result['scan_id']   = scan_id
-    result['user_name'] = current_user['full_name']
+    result['scan_id']    = scan_id
+    result['user_name']  = current_user['full_name']
+    result['created_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return jsonify(result)
 
 

@@ -225,6 +225,7 @@ async function loadScanRecordById(scanId) {
                 name: rec.user_name || rec.username,
                 barangay: rec.barangay || 'Bacnotan'
             },
+            created_at: rec.created_at,
             highlighted_image: hlUrl
         };
 
@@ -704,11 +705,25 @@ function renderResults(data) {
             return;
         }
 
-        // --- Populate the formal template ---
-        const now = new Date();
+        // --- Populate the formal template with the actual scan timestamp (Philippine Time) ---
+        const scanTimestampRaw = data.created_at || data.scan_date;
+        let formattedScanDate = "";
+        if (scanTimestampRaw) {
+            let str = String(scanTimestampRaw).trim();
+            if (!str.includes('+') && !str.endsWith('Z')) {
+                str = str.replace(' ', 'T') + '+08:00';
+            }
+            const parsed = new Date(str);
+            formattedScanDate = !isNaN(parsed.getTime())
+                ? parsed.toLocaleString('en-US', { timeZone: 'Asia/Manila', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
+                : scanTimestampRaw;
+        } else {
+            formattedScanDate = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+        }
+
         document.getElementById("repScanId").innerText = data.scan_id ? `#${data.scan_id}` : "Pending";
         document.getElementById("repUserId").innerText = _user.full_name || _user.username || "Registered User";
-        document.getElementById("repDate").innerText = now.toLocaleString();
+        document.getElementById("repDate").innerText = formattedScanDate;
         document.getElementById("repLocation").innerText = _user.barangay ? `${_user.barangay}, Bacnotan` : "Bacnotan, La Union";
 
         // Infection Spread Percentage and Categorical Status

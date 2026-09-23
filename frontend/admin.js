@@ -787,7 +787,7 @@ function updateHeatmapMetrics() {
 
     rawHeatmapData.forEach(d => {
         totalCases += (d.total_scans || 0);
-        const diseased = (d.diseased_scans || 0);
+        const diseased = (d.unhealthy_scans !== undefined ? d.unhealthy_scans : d.diseased_scans) || 0;
         if (diseased === 0) {
             cleanCount++;
         }
@@ -850,7 +850,7 @@ function renderHeatmapMarkers() {
     heatmapMarkersGroup.clearLayers();
     heatmapMarkersMap = {};
 
-    const diseaseFilter = (document.getElementById('heatmapDiseaseFilter')?.value || '').toLowerCase();
+    const diseaseFilter = (document.getElementById('heatmapDiseaseFilter')?.value || '').trim().toLowerCase();
 
     const validBarangays = rawHeatmapData.filter(d => d.barangay && d.barangay.toLowerCase() !== 'bacnotan' && d.barangay.toLowerCase() !== 'unknown');
 
@@ -858,11 +858,14 @@ function renderHeatmapMarkers() {
         const lat = d.lat || 16.7450;
         const lng = d.lng || 120.3600;
 
+        const diseasedTotal = (d.unhealthy_scans !== undefined ? d.unhealthy_scans : d.diseased_scans) || 0;
         let targetCount = d.total_scans || 0;
-        let targetDiseased = d.diseased_scans || 0;
+        let targetDiseased = diseasedTotal;
 
         if (diseaseFilter) {
-            targetCount = (d.disease_counts && d.disease_counts[diseaseFilter]) ? d.disease_counts[diseaseFilter] : 0;
+            const counts = d.disease_counts || d.diseases || {};
+            const matchedKey = Object.keys(counts).find(k => k.toLowerCase() === diseaseFilter);
+            targetCount = matchedKey ? counts[matchedKey] : 0;
             targetDiseased = targetCount;
         }
 
@@ -889,10 +892,13 @@ function renderHeatmapMarkers() {
         }
 
         // Popup HTML with details and link to view barangay report
-        const diseaseBreakdownHtml = Object.entries(d.disease_counts || {})
+        const countsObj = d.disease_counts || d.diseases || {};
+        const diseaseBreakdownHtml = Object.entries(countsObj)
             .filter(([_, cnt]) => cnt > 0)
             .map(([name, cnt]) => `<li style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:2px;"><span>${name}</span><strong style="color:#ef4444;">${cnt}</strong></li>`)
             .join('') || '<li style="color:#16a34a;font-size:0.8rem;">No diseases reported</li>';
+
+        const topDiseaseName = d.top_disease || d.most_common_disease || 'None';
 
         const popupHtml = `
             <div style="font-family:Poppins,sans-serif;min-width:210px;padding:4px;">
@@ -901,8 +907,8 @@ function renderHeatmapMarkers() {
                     <span style="display:inline-block;padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;background:${style.fillColor}20;color:${style.color};border:1px solid ${style.color};">${style.label}</span>
                 </div>
                 <p style="margin:2px 0;font-size:0.82rem;"><strong>Total Scans:</strong> ${d.total_scans || 0}</p>
-                <p style="margin:2px 0;font-size:0.82rem;"><strong>Diseased:</strong> <span style="color:#ef4444;font-weight:600;">${d.diseased_scans || 0}</span> | <strong>Healthy:</strong> <span style="color:#16a34a;font-weight:600;">${d.healthy_scans || 0}</span></p>
-                <p style="margin:2px 0;font-size:0.82rem;"><strong>Top Disease:</strong> ${d.top_disease || 'None'}</p>
+                <p style="margin:2px 0;font-size:0.82rem;"><strong>Diseased:</strong> <span style="color:#ef4444;font-weight:600;">${diseasedTotal}</span> | <strong>Healthy:</strong> <span style="color:#16a34a;font-weight:600;">${d.healthy_scans || 0}</span></p>
+                <p style="margin:2px 0;font-size:0.82rem;"><strong>Top Disease:</strong> ${topDiseaseName}</p>
                 
                 <div style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:6px;">
                     <span style="font-size:0.75rem;font-weight:600;color:#64748b;">Disease Counts:</span>
@@ -948,19 +954,26 @@ function renderBarangayTable() {
     }
 
     const query = (document.getElementById('barangayTableSearch')?.value || '').toLowerCase();
+
     const rows = rawHeatmapData
         .filter(b => b.barangay && b.barangay.toLowerCase() !== 'bacnotan' && b.barangay.toLowerCase() !== 'unknown')
         .filter(b => !query || b.barangay.toLowerCase().includes(query))
-        .sort((a, b) => (b.diseased_scans || 0) - (a.diseased_scans || 0))
+        .sort((a, b) => {
+            const disA = (a.unhealthy_scans !== undefined ? a.unhealthy_scans : a.diseased_scans) || 0;
+            const disB = (b.unhealthy_scans !== undefined ? b.unhealthy_scans : b.diseased_scans) || 0;
+            return disB - disA;
+        })
         .map(b => {
-            const style = getConcentrationStyle(b.total_scans || 0, b.diseased_scans || 0);
+            const diseased = (b.unhealthy_scans !== undefined ? b.unhealthy_scans : b.diseased_scans) || 0;
+            const topDisease = b.top_disease || b.most_common_disease || 'None';
+            const style = getConcentrationStyle(b.total_scans || 0, diseased);
             return `
                 <tr>
                     <td><strong>${b.barangay}</strong></td>
                     <td>${b.total_scans || 0}</td>
-                    <td><strong style="color:${(b.diseased_scans || 0) > 0 ? '#dc2626' : '#64748b'};">${b.diseased_scans || 0}</strong></td>
+                    <td><strong style="color:${diseased > 0 ? '#dc2626' : '#64748b'};">${diseased}</strong></td>
                     <td><strong style="color:${(b.healthy_scans || 0) > 0 ? '#16a34a' : '#64748b'};">${b.healthy_scans || 0}</strong></td>
-                    <td>${b.top_disease || 'None'}</td>
+                    <td>${topDisease}</td>
                     <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;background:${style.fillColor}20;color:${style.color};border:1px solid ${style.color};">${style.label}</span></td>
                     <td>
                         <button onclick="openBarangaySummaryModal('${b.barangay}')" style="padding:4px 10px;background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600;">📋 Report</button>
@@ -1430,12 +1443,15 @@ async function openBarangaySummaryModal(barangayName) {
         const data = await res.json();
 
         const totalScans = data.total_scans || 0;
-        const diseasedScans = data.diseased_scans || 0;
+        const diseasedScans = (data.unhealthy_scans !== undefined ? data.unhealthy_scans : data.diseased_scans) || 0;
         const healthyScans = data.healthy_scans || 0;
-        const primaryDisease = data.primary_disease || 'None';
+        const primaryDisease = data.primary_disease || data.top_disease || 'None';
         const recentScans = data.recent_scans || [];
 
-        const diseaseBreakdownRows = Object.entries(data.disease_counts || {})
+        const counts = data.disease_counts || {};
+        const diseaseBreakdownRows = (Array.isArray(counts)
+            ? counts.map(item => [item.disease, item.count])
+            : Object.entries(counts))
             .map(([disease, count]) => `
                 <div style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid #e2e8f0;text-align:center;">
                     <div style="font-size:0.8rem;color:#64748b;">${disease}</div>

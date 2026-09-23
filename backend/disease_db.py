@@ -18,9 +18,10 @@ DB_CONFIG = {
     "host":     "mysql-36584390-dugay684-9775.e.aivencloud.com",
     "user":     "avnadmin",
     "password": "AVNS_6KuybtPDl6mL-ahfFvI",
-    "port":     10633,
-    "database": "defaultdb",
-    "autocommit": True
+    "port":         10633,
+    "database":     "defaultdb",
+    "autocommit":   True,
+    "init_command": "SET time_zone = '+08:00'"
 }
 
 # Accurate coordinates for all 47 Barangays of Bacnotan, La Union (PhilAtlas / PSA Geographic Data)
@@ -131,6 +132,11 @@ def get_db_connection():
     try: 
         conn = mariadb.connect(**DB_CONFIG) 
         conn.auto_reconnect = True
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SET time_zone = '+08:00'")
+        except Exception:
+            pass
         if not _migrated:
             run_auto_migrations(conn)
             _migrated = True
@@ -584,11 +590,15 @@ def get_barangay_heatmap_data():
             d_counts = stat["diseases"]
             max_d = max(d_counts.items(), key=lambda x: x[1])
             if max_d[1] > 0:
-                stat["most_common_disease"] = max_d[0]
+                top_dis = max_d[0]
             elif stat["healthy_scans"] > 0:
-                stat["most_common_disease"] = "Healthy"
+                top_dis = "Healthy"
             else:
-                stat["most_common_disease"] = "None"
+                top_dis = "None"
+            stat["most_common_disease"] = top_dis
+            stat["top_disease"] = top_dis
+            stat["diseased_scans"] = stat["unhealthy_scans"]
+            stat["disease_counts"] = dict(stat["diseases"])
 
         return list(barangay_stats.values())
     except Exception as e:
@@ -818,7 +828,9 @@ def get_dashboard_stats():
         return {
             'total_users': total_users, 'total_scans': total_scans,
             'new_users_today': new_users_today, 'new_scans_today': new_scans_today,
-            'healthy_scans': healthy_scans, 'diseased_scans': total_scans - healthy_scans,
+            'healthy_scans': healthy_scans,
+            'diseased_scans': total_scans - healthy_scans,
+            'unhealthy_scans': total_scans - healthy_scans,
             'top_diseases': top_diseases,
             'gender_distribution': gender_distribution,
             'users_per_barangay': users_per_barangay,
@@ -985,6 +997,7 @@ def get_barangay_summary(barangay):
         conn.close()
 
         top_disease = disease_counts[0]['disease'] if disease_counts else ("Healthy Field" if healthy_scans > 0 else "None Reported")
+        disease_dict = {r['disease']: r['count'] for r in disease_counts}
 
         return {
             'barangay': clean_b,
@@ -992,8 +1005,11 @@ def get_barangay_summary(barangay):
             'total_scans': total_scans,
             'healthy_scans': healthy_scans,
             'unhealthy_scans': unhealthy_scans,
+            'diseased_scans': unhealthy_scans,
             'top_disease': top_disease,
-            'disease_counts': disease_counts,
+            'primary_disease': top_disease,
+            'disease_counts': disease_dict,
+            'disease_list': disease_counts,
             'recent_scans': recent_scans
         }
     except Exception as e:
