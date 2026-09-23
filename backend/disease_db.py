@@ -167,11 +167,6 @@ DEFAULT_ADVICE = {
         "Remove and burn infected leaves to prevent further spread.",
         "Practice crop rotation to break the disease cycle."
     ],
-    "Rust": [
-        "Apply Hexaconazole or Propiconazole fungicide.",
-        "Ensure good field drainage and weed management to increase air circulation.",
-        "Avoid planting late during the season as rust thrives in cooler late-season temperatures."
-    ],
     "Healthy": [
         "Walang kailangang gamot. Panatilihin ang regular na patubig at pag-aalaga.",
         "Magpatuloy sa regular na pagsusuri ng palayan upang maagapan ang anumang peste."
@@ -523,7 +518,7 @@ def get_barangay_heatmap_data():
                 "unhealthy_scans": 0,
                 "diseases": {
                     "Blight": 0, "Blast": 0, "Brown Spot": 0,
-                    "Rust": 0, "Leaf Streak": 0, "Others": 0
+                    "Leaf Streak": 0, "Others": 0
                 },
                 "most_common_disease": "None"
             }
@@ -778,7 +773,7 @@ def get_dashboard_stats():
 
 # --- 8. DISEASE DATABASE EDITING (CRUD) ---
 
-SUPPORTED_DISEASES = ["Blight", "Blast", "Brown Spot", "Rust", "Leaf Streak", "Others", "Healthy"]
+SUPPORTED_DISEASES = ["Blight", "Blast", "Brown Spot", "Leaf Streak", "Others", "Healthy"]
 
 def get_all_disease_advice():
     try:

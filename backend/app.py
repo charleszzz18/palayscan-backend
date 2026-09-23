@@ -333,7 +333,6 @@ def get_tagalog_translation(disease_name, stage, weather):
         "Blight":     "Nakitaan ng Blight ang iyong palay. Ito ay sanhi ng bacteria at mabilis kumalat.",
         "Blast":      "Mayroong Blast ang iyong palay. Ito ay isang mapanirang sakit na sumisira sa mga dahon.",
         "Brown Spot": "Mayroong Brown Spot ang iyong palay. Kadalasan ito ay dahil sa kulang na sustansya ng lupa.",
-        "Rust":       "Ang iyong palay ay may sakit na Rust, na nagdudulot ng kalawangin na kulay sa mga dahon.",
         "Leaf Streak": "May Leaf Streak ang palay. Ito ay mga maninipis na guhit sa dahon.",
         "Leaf Strip":  "May Leaf Streak ang palay. Ito ay mga maninipis na guhit sa dahon.",
         "Healthy":    "Maganda ang kalagayan ng iyong palay. Walang nakitang sakit."
@@ -449,16 +448,6 @@ DISEASE_DIAGNOSTIC_EXPLANATIONS = {
         "symptom_tl": "Maninipis na linyang sugat sa pagitan ng mga ugat ng dahon na nagiging kulay kayumanggi.",
         "why_detected": "Linear lesion streaks restricted between leaf veins with translucent or yellowish-brown appearance."
     },
-    "Rust": {
-        "name": "Leaf Rust",
-        "name_tl": "Leaf Rust (Kalawang sa Dahon)",
-        "lesion_color": "Powdery Orange-Red Pustules",
-        "lesion_color_tl": "Parang Pulbos na Kahel-Pula",
-        "color_hex": ["#ea580c", "#c2410c"],
-        "symptom": "Small, powdery orange-brown pustules scattered across the leaf blade.",
-        "symptom_tl": "Maliliit at parang pulbos na mamula-mulang kayumangging bukol sa ibabaw ng dahon.",
-        "why_detected": "Powdery reddish-orange pustules observed erupting across the leaf surface."
-    },
     "Healthy": {
         "name": "Healthy",
         "name_tl": "Malusog na Palay",
@@ -508,10 +497,6 @@ def has_visual_evidence_for_disease(disease_name, tex_metrics):
     elif disease_name in ("Leaf Streak", "Leaf Strip"):
         # Leaf Streak requires narrow linear interveinal streaks
         return (num_streaks >= 6 and max_streak_ar >= 6.0)
-        
-    elif disease_name == "Rust":
-        # Rust requires powdery orange-red/brown pustules
-        return (orange_ratio >= 0.035 or (orange_ratio >= 0.018 and brown_ratio >= 0.018))
 
     return False
 
@@ -669,7 +654,7 @@ def analyze_rice_health(img, weather_condition="hot"):
     if "Leaf Strip" in dl_all_preds:
         dl_all_preds["Leaf Streak"] = dl_all_preds.pop("Leaf Strip")
 
-    SUPPORTED_DISEASES = ["Blight", "Blast", "Brown Spot", "Rust", "Leaf Streak", "Leaf Strip", "Healthy"]
+    SUPPORTED_DISEASES = ["Blight", "Blast", "Brown Spot", "Leaf Streak", "Leaf Strip", "Healthy"]
     if dl_disease and dl_disease not in SUPPORTED_DISEASES:
         dl_disease = None
 

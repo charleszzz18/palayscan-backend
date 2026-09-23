@@ -439,16 +439,14 @@ function renderResults(data) {
         primaryDisease === "Blight" ? "Straw-Yellow to Bleached Wavy White" :
         primaryDisease === "Brown Spot" ? "Reddish-Brown with Yellow Halo" :
         primaryDisease === "Blast" ? "Grayish-White with Dark Brown Margin" :
-        (primaryDisease === "Leaf Streak" || primaryDisease === "Leaf Strip") ? "Narrow Yellowish-Brown Streaks" :
-        primaryDisease === "Rust" ? "Powdery Orange-Red Pustules" : "Vibrant Clean Green"
+        (primaryDisease === "Leaf Streak" || primaryDisease === "Leaf Strip") ? "Narrow Yellowish-Brown Streaks" : "Vibrant Clean Green"
     );
 
     const colorHex = data.color_hex || (
         primaryDisease === "Blight" ? ["#eab308", "#fef08a"] :
         primaryDisease === "Brown Spot" ? ["#78350f", "#ca8a04"] :
         primaryDisease === "Blast" ? ["#94a3b8", "#78350f"] :
-        (primaryDisease === "Leaf Streak" || primaryDisease === "Leaf Strip") ? ["#b45309", "#d97706"] :
-        primaryDisease === "Rust" ? ["#ea580c", "#c2410c"] : ["#22c55e", "#16a34a"]
+        (primaryDisease === "Leaf Streak" || primaryDisease === "Leaf Strip") ? ["#b45309", "#d97706"] : ["#22c55e", "#16a34a"]
     );
 
     const apiBase = (typeof API_BASE_URL !== 'undefined' && API_BASE_URL) ? API_BASE_URL : '';
@@ -479,9 +477,7 @@ function renderResults(data) {
                 </div>
                 <div class="diag-header-action">
                     ${isHealthy ? '' : (
-                        primaryDisease.toLowerCase().includes('rust')
-                            ? `<button class="info-btn disabled" disabled style="background:#64748b; color:#fff; cursor:not-allowed; opacity:0.85;">Update Coming Soon</button>`
-                            : `<button class="info-btn" onclick="window.location.href='disease-info.html?disease=${encodeURIComponent(primaryDisease)}'">Detailed Treatment Guide &rarr;</button>`
+                        `<button class="info-btn" onclick="window.location.href='disease-info.html?disease=${encodeURIComponent(primaryDisease)}'">Detailed Treatment Guide &rarr;</button>`
                     )}
                 </div>
             </div>

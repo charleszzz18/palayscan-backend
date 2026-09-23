@@ -19,7 +19,6 @@ class ImageComparison:
         "blast":              "Blast",
         "brown spot":         "Brown Spot",
         "brownspot":          "Brown Spot",
-        "rust":               "Rust",
         "leaf strip":         "Leaf Streak",
         "leaf streak":        "Leaf Streak",
         "leaf stripe":        "Leaf Streak",

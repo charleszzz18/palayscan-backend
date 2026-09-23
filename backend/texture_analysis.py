@@ -109,10 +109,6 @@ def analyze_texture(img, sensitivity=1.0, return_metrics=False): # Texture analy
     if brown_ratio > 0.03 and gray_ratio > 0.015: 
         possible_diseases.append("Blast")
         
-    # RULE: Rust (Orange/rust colored spots)
-    if orange_ratio > 0.03 or (brown_ratio > 0.08 and orange_ratio > 0.01): 
-        possible_diseases.append("Rust")
-
     # --- 7. CLEAN UP RESULTS ---
     possible_diseases = list(set(possible_diseases))
 

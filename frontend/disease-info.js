@@ -137,16 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const recActions = document.getElementById('recommendedActions');
         if (recActions) recActions.style.display = 'none';
 
-        if (diseaseName && diseaseName.toLowerCase().includes('rust')) {
-            document.getElementById('diseaseName').textContent = diseaseName;
-            document.getElementById('diseaseContent').innerHTML = `
-                <div class="error-message" style="text-align: center; padding: 60px;">
-                    <h3 style="margin-bottom: 12px; color: #1e293b;">Rust Disease Update Coming Soon</h3>
-                    <p style="color: #64748b; max-width: 500px; margin: 0 auto; line-height: 1.6;">We are currently gathering more training samples and verified treatment guidelines for Rust. Detailed symptoms, overview, and harvest projection will be available in the next update.</p>
-                </div>`;
-        } else {
-            document.getElementById('diseaseContent').innerHTML = `<div class="error-message"><p>Disease information not found.</p></div>`;
-        }
+        document.getElementById('diseaseContent').innerHTML = `<div class="error-message"><p>Disease information not found.</p></div>`;
     }
 });
 
