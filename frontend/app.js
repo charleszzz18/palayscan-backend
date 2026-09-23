@@ -53,21 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
         headerActions.innerHTML = html;
     }
 
-    // Display top notification banner for Staff/Admin in field test mode
-    const returnBanner = document.getElementById("staffReturnBanner");
-    if (returnBanner && isStaffOrAdmin) {
-        returnBanner.style.display = 'flex';
-        const titleEl = document.getElementById("staffReturnTitle");
-        const linkEl  = document.getElementById("staffReturnLink");
-        if (_user.role === 'admin') {
-            if (titleEl) titleEl.textContent = 'Administrator Field Testing Session';
-            if (linkEl)  linkEl.textContent  = '← Back to Admin Panel';
-        } else {
-            if (titleEl) titleEl.textContent = 'MAO Staff Field Testing Session';
-            if (linkEl)  linkEl.textContent  = '← Back to MAO Panel';
-        }
-    }
-
     // --- 2.2 Select DOM elements ---
     const uploadArea = document.getElementById("uploadArea");
     const uploadPreview = document.getElementById("uploadPreview");
