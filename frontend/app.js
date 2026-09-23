@@ -738,10 +738,13 @@ function renderResults(data) {
         document.getElementById("repRec1").innerText = isHealthy ? "Continue regular watering and fertilization schedule." : `Isolate affected areas immediately to prevent ${primaryDisease} spread.`;
         document.getElementById("repRec2").innerText = isHealthy ? "Monitor crop weekly for any sudden changes." : `Apply recommended treatments for ${primaryDisease} within 48 hours.`;
         
-        document.getElementById("repSystemId").innerText = `REP-${data.scan_id || Math.floor(Math.random()*10000)}`;
+        const repSysIdEl = document.getElementById("repSystemId");
+        if (repSysIdEl) {
+            repSysIdEl.innerText = `REP-${data.scan_id || Math.floor(Math.random()*10000)}`;
+        }
 
         const opt = {
-            margin: [0, 0],
+            margin: 0,
             filename: `Palayscan_Official_Report_${data.scan_id || 'scan'}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
@@ -750,7 +753,8 @@ function renderResults(data) {
                 letterRendering: true,
                 scrollY: 0
             },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: 'avoid-all' }
         };
 
         element.classList.add('active-pdf');

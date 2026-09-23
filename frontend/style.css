@@ -2502,19 +2502,21 @@ main {
 /* ========================================================= */
 #pdfReportTemplate {
     width: 210mm;
-    /* Standard A4 width */
-    min-height: 297mm;
-    /* Standard A4 height */
+    max-width: 210mm;
+    /* Standard A4 height is 297mm. Setting 296mm with overflow: hidden strictly prevents page breaks */
+    height: 296mm;
+    max-height: 296mm;
     background: #ffffff;
     color: #1a1a1a;
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    padding: 15mm;
+    padding: 12mm 15mm;
     box-sizing: border-box;
     position: absolute;
     left: -9999px;
     /* Hide off-screen by default */
     top: 0;
     z-index: -100;
+    overflow: hidden;
 }
 
 #pdfReportTemplate.active-pdf {
