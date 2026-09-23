@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PALAYSCAN | Admin Panel</title>
-    <link rel="stylesheet" href="style.css?v=12">
+    <link rel="stylesheet" href="style.css?v=13">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="admin-body">
@@ -201,14 +201,30 @@
 
             <!-- Map Container -->
             <div class="admin-chart-card" style="padding: 16px; position: relative;">
-                <div id="barangayHeatmap" style="height: 520px; width: 100%; border-radius: 14px; z-index: 1;"></div>
+                <div id="barangayHeatmap" style="height: 540px; width: 100%; border-radius: 14px; z-index: 1; overflow: hidden; position: relative;"></div>
+
+                <!-- 3D Camera Controls Overlay -->
+                <div class="map-3d-controls" style="position: absolute; top: 28px; right: 28px; z-index: 10; display: flex; flex-direction: column; gap: 8px;">
+                    <button type="button" id="btnToggle3D" onclick="toggle3DView()" title="Toggle 2D / 3D Perspective" style="background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 7px 12px; font-weight: 700; font-size: 0.78rem; color: #1e293b; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 6px; font-family: Poppins, sans-serif;">
+                        <span id="toggle3DIcon">📐</span> <span id="toggle3DText">3D View (52°)</span>
+                    </button>
+                    <button type="button" onclick="reset3DView()" title="Reset Camera to Bacnotan Center" style="background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 7px 12px; font-weight: 700; font-size: 0.78rem; color: #166534; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 6px; font-family: Poppins, sans-serif;">
+                        🔄 Reset Camera
+                    </button>
+                    <div style="background: rgba(15,23,42,0.85); backdrop-filter: blur(6px); color: #f8fafc; font-size: 0.68rem; padding: 4px 8px; border-radius: 6px; text-align: center; font-weight: 600; font-family: Poppins, sans-serif; pointer-events: none;">
+                        🖱️ Right-Click + Drag to Rotate
+                    </div>
+                </div>
+
                 <!-- Map Legend -->
-                <div class="heatmap-legend">
-                    <h4>Concentration Level</h4>
-                    <div class="legend-item"><span class="legend-dot dot-zero"></span> 0 Cases (Safe)</div>
-                    <div class="legend-item"><span class="legend-dot dot-low"></span> 1 - 2 Cases (Low)</div>
-                    <div class="legend-item"><span class="legend-dot dot-med"></span> 3 - 5 Cases (Moderate)</div>
-                    <div class="legend-item"><span class="legend-dot dot-high"></span> 6+ Cases (Hotspot)</div>
+                <div class="heatmap-legend" style="bottom: 28px; left: 28px;">
+                    <h4 style="display: flex; align-items: center; gap: 6px;">
+                        <span>🏛️</span> 3D Pillar Height & Status
+                    </h4>
+                    <div class="legend-item"><span class="legend-dot dot-zero"></span> 0 Cases (Safe Ground)</div>
+                    <div class="legend-item"><span class="legend-dot dot-low"></span> 1 - 2 Cases (Elevated Low)</div>
+                    <div class="legend-item"><span class="legend-dot dot-med"></span> 3 - 5 Cases (Mid Tower)</div>
+                    <div class="legend-item"><span class="legend-dot dot-high"></span> 6+ Cases (Hotspot Spire)</div>
                 </div>
             </div>
 
@@ -744,6 +760,6 @@
 </div>
 
 <script src="api_config.js"></script>
-<script src="admin.js?v=12"></script>
+<script src="admin.js?v=13"></script>
 </body>
 </html>

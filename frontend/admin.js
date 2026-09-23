@@ -107,7 +107,10 @@ function switchTab(tabName, el) {
 
     // Trigger target load functions depending on selected tab
     if (tabName === 'dashboard') loadDashboard();
-    if (tabName === 'heatmap') loadHeatmapData();
+    if (tabName === 'heatmap') {
+        loadHeatmapData();
+        setTimeout(() => { if (map3dInstance) map3dInstance.resize(); }, 160);
+    }
     if (tabName === 'scans') loadScans();
     if (tabName === 'users') loadUsers();
     if (tabName === 'diseases') loadDiseases();
@@ -754,12 +757,20 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // =========================================================================
-// 9. BARANGAY DISEASE HEAT MAP (LEAFLET)
+// 9. BARANGAY DISEASE 3D HEAT MAP (MAPLIBRE GL 3D)
 // =========================================================================
-let leafletMap = null;
-let heatmapMarkersGroup = null;
+let map3dInstance = null;
 let rawHeatmapData = [];
-let heatmapMarkersMap = {};
+let map3dHtmlMarkers = [];
+let map3dActivePopup = null;
+let is3DPerspectiveActive = true;
+
+// Strict Geographic Bounding Box for Municipality of Bacnotan, La Union
+const BACNOTAN_BOUNDS = [
+    [120.2900, 16.6500], // Southwest Coordinates [lng, lat]
+    [120.4500, 16.8350]  // Northeast Coordinates [lng, lat]
+];
+const BACNOTAN_CENTER = [120.3650, 16.7450]; // [lng, lat]
 
 async function loadHeatmapData() {
     try {
@@ -814,49 +825,166 @@ function initOrUpdateMap() {
     const mapEl = document.getElementById('barangayHeatmap');
     if (!mapEl) return;
 
-    if (!leafletMap) {
-        // Bacnotan, La Union real geographic center coordinates: [16.7450, 120.3600]
-        leafletMap = L.map('barangayHeatmap').setView([16.7450, 120.3600], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 18
-        }).addTo(leafletMap);
-        heatmapMarkersGroup = L.layerGroup().addTo(leafletMap);
-    }
+    if (!map3dInstance) {
+        if (typeof maplibregl === 'undefined') {
+            console.error('MapLibre GL JS library is not loaded');
+            return;
+        }
 
-    setTimeout(() => {
-        if (leafletMap) leafletMap.invalidateSize();
-    }, 150);
+        map3dInstance = new maplibregl.Map({
+            container: 'barangayHeatmap',
+            style: {
+                version: 8,
+                sources: {
+                    'carto-voyager': {
+                        type: 'raster',
+                        tiles: [
+                            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+                            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+                            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
+                        ],
+                        tileSize: 256,
+                        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+                    }
+                },
+                layers: [
+                    {
+                        id: 'carto-tiles-layer',
+                        type: 'raster',
+                        source: 'carto-voyager',
+                        minzoom: 0,
+                        maxzoom: 19
+                    }
+                ]
+            },
+            center: BACNOTAN_CENTER,
+            zoom: 12.8,
+            pitch: 52, // 3D Camera tilt
+            bearing: -15, // Aligned with Bacnotan coastline and valley
+            maxBounds: BACNOTAN_BOUNDS, // Strictly lock camera to Bacnotan
+            maxBoundsViscosity: 1.0, // Hard boundary lock preventing panning away
+            minZoom: 12.0, // Cannot zoom out into whole province
+            maxZoom: 17.5
+        });
+
+        // Add standard navigation controls (Zoom in/out, Compass/Reset bearing)
+        map3dInstance.addControl(new maplibregl.NavigationControl({
+            showCompass: true,
+            visualizePitch: true
+        }), 'bottom-right');
+
+        map3dInstance.on('load', () => {
+            setup3DLayers();
+            renderHeatmapMarkers();
+        });
+    } else {
+        setTimeout(() => {
+            if (map3dInstance) map3dInstance.resize();
+        }, 150);
+    }
+}
+
+function setup3DLayers() {
+    if (!map3dInstance || map3dInstance.getSource('barangay-3d-source')) return;
+
+    // 1. Add GeoJSON source for 3D polygon pillars
+    map3dInstance.addSource('barangay-3d-source', {
+        type: 'geojson',
+        data: {
+            type: 'FeatureCollection',
+            features: []
+        }
+    });
+
+    // 2. Add Ground Base Halo Rings (visible on the terrain surface)
+    map3dInstance.addLayer({
+        id: 'barangay-ground-halo',
+        type: 'line',
+        source: 'barangay-3d-source',
+        paint: {
+            'line-color': ['get', 'color'],
+            'line-width': 2.5,
+            'line-opacity': 0.85
+        }
+    });
+
+    // 3. Add 3D Extruded Pillars (fill-extrusion)
+    map3dInstance.addLayer({
+        id: 'barangay-3d-pillars',
+        type: 'fill-extrusion',
+        source: 'barangay-3d-source',
+        paint: {
+            'fill-extrusion-color': ['get', 'color'],
+            'fill-extrusion-height': ['get', 'height'],
+            'fill-extrusion-base': 0,
+            'fill-extrusion-opacity': 0.88
+        }
+    });
+
+    // 4. Click event on 3D pillars
+    map3dInstance.on('click', 'barangay-3d-pillars', (e) => {
+        if (!e.features || !e.features.length) return;
+        const props = e.features[0].properties;
+        const coords = [Number(props.lng), Number(props.lat)];
+        showBarangay3DPopup(props, coords);
+    });
+
+    // 5. Cursor styling on hover
+    map3dInstance.on('mouseenter', 'barangay-3d-pillars', () => {
+        map3dInstance.getCanvas().style.cursor = 'pointer';
+    });
+    map3dInstance.on('mouseleave', 'barangay-3d-pillars', () => {
+        map3dInstance.getCanvas().style.cursor = '';
+    });
+}
+
+function createGeoJSONCircle(centerLngLat, radiusInMeters, points = 24) {
+    const [lng, lat] = centerLngLat;
+    const coords = [];
+    const distanceX = radiusInMeters / (111320 * Math.cos(lat * Math.PI / 180));
+    const distanceY = radiusInMeters / 110574;
+
+    for (let i = 0; i < points; i++) {
+        const theta = (i / points) * (2 * Math.PI);
+        const x = distanceX * Math.cos(theta);
+        const y = distanceY * Math.sin(theta);
+        coords.push([lng + x, lat + y]);
+    }
+    coords.push(coords[0]); // Complete closed polygon ring
+    return [coords];
 }
 
 function getConcentrationStyle(count, diseasedCount) {
     if (diseasedCount === 0 && count === 0) {
-        return { color: '#22c55e', fillColor: '#22c55e', radius: 10, fillOpacity: 0.35, label: 'Safe / Clean' };
+        return { color: '#22c55e', fillColor: '#22c55e', height: 45, radiusMeters: 130, label: 'Safe / Clean' };
     }
     if (diseasedCount === 0) {
-        return { color: '#10b981', fillColor: '#10b981', radius: 12, fillOpacity: 0.45, label: 'Healthy Scans' };
+        return { color: '#10b981', fillColor: '#10b981', height: 80, radiusMeters: 140, label: 'Healthy Scans' };
     }
     if (diseasedCount <= 2) {
-        return { color: '#eab308', fillColor: '#eab308', radius: 16, fillOpacity: 0.6, label: 'Low Risk' };
+        return { color: '#eab308', fillColor: '#eab308', height: 180, radiusMeters: 155, label: 'Low Risk' };
     }
     if (diseasedCount <= 5) {
-        return { color: '#f97316', fillColor: '#f97316', radius: 22, fillOpacity: 0.7, label: 'Moderate Risk' };
+        return { color: '#f97316', fillColor: '#f97316', height: 320, radiusMeters: 175, label: 'Moderate Risk' };
     }
-    return { color: '#ef4444', fillColor: '#ef4444', radius: 28, fillOpacity: 0.85, label: 'Hotspot / High Risk' };
+    return { color: '#ef4444', fillColor: '#ef4444', height: 480, radiusMeters: 200, label: 'Hotspot / High Risk' };
 }
 
 function renderHeatmapMarkers() {
-    if (!leafletMap || !heatmapMarkersGroup) return;
-    heatmapMarkersGroup.clearLayers();
-    heatmapMarkersMap = {};
+    if (!map3dInstance) return;
+
+    // Clear existing HTML floating markers
+    map3dHtmlMarkers.forEach(m => m.remove());
+    map3dHtmlMarkers = [];
 
     const diseaseFilter = (document.getElementById('heatmapDiseaseFilter')?.value || '').trim().toLowerCase();
-
     const validBarangays = rawHeatmapData.filter(d => d.barangay && d.barangay.toLowerCase() !== 'bacnotan' && d.barangay.toLowerCase() !== 'unknown');
 
+    const features = [];
+
     validBarangays.forEach(d => {
-        const lat = d.lat || 16.7450;
-        const lng = d.lng || 120.3600;
+        const lat = Number(d.lat || 16.7450);
+        const lng = Number(d.lng || 120.3600);
 
         const diseasedTotal = (d.unhealthy_scans !== undefined ? d.unhealthy_scans : d.diseased_scans) || 0;
         let targetCount = d.total_scans || 0;
@@ -870,77 +998,213 @@ function renderHeatmapMarkers() {
         }
 
         const style = getConcentrationStyle(targetCount, targetDiseased);
+        const topDiseaseName = d.top_disease || d.most_common_disease || 'None';
+        const countsObj = d.disease_counts || d.diseases || {};
 
-        // Circle marker representing barangay
-        const marker = L.circleMarker([lat, lng], {
-            radius: style.radius,
-            color: style.color,
-            fillColor: style.fillColor,
-            fillOpacity: style.fillOpacity,
-            weight: 2
+        // 1. Create 3D Extrusion Polygon Feature
+        features.push({
+            type: 'Feature',
+            geometry: {
+                type: 'Polygon',
+                coordinates: createGeoJSONCircle([lng, lat], style.radiusMeters)
+            },
+            properties: {
+                barangay: d.barangay,
+                lat: lat,
+                lng: lng,
+                total_scans: d.total_scans || 0,
+                unhealthy_scans: diseasedTotal,
+                healthy_scans: d.healthy_scans || 0,
+                top_disease: topDiseaseName,
+                height: style.height,
+                color: style.color,
+                label: style.label,
+                disease_counts: JSON.stringify(countsObj)
+            }
         });
 
-        // Pulsing heat halo for hotspots
-        if (targetDiseased >= 3) {
-            L.circle([lat, lng], {
-                radius: style.radius * 25,
-                color: style.color,
-                fillColor: style.fillColor,
-                fillOpacity: 0.15,
-                weight: 1
-            }).addTo(heatmapMarkersGroup);
-        }
-
-        // Popup HTML with details and link to view barangay report
-        const countsObj = d.disease_counts || d.diseases || {};
-        const diseaseBreakdownHtml = Object.entries(countsObj)
-            .filter(([_, cnt]) => cnt > 0)
-            .map(([name, cnt]) => `<li style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:2px;"><span>${name}</span><strong style="color:#ef4444;">${cnt}</strong></li>`)
-            .join('') || '<li style="color:#16a34a;font-size:0.8rem;">No diseases reported</li>';
-
-        const topDiseaseName = d.top_disease || d.most_common_disease || 'None';
-
-        const popupHtml = `
-            <div style="font-family:Poppins,sans-serif;min-width:210px;padding:4px;">
-                <h4 style="margin:0 0 6px 0;color:#166534;font-size:1.05rem;">📍 Brgy. ${d.barangay}</h4>
-                <div style="margin-bottom:8px;">
-                    <span style="display:inline-block;padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;background:${style.fillColor}20;color:${style.color};border:1px solid ${style.color};">${style.label}</span>
-                </div>
-                <p style="margin:2px 0;font-size:0.82rem;"><strong>Total Scans:</strong> ${d.total_scans || 0}</p>
-                <p style="margin:2px 0;font-size:0.82rem;"><strong>Unhealthy:</strong> <span style="color:#ef4444;font-weight:600;">${diseasedTotal}</span> | <strong>Healthy:</strong> <span style="color:#16a34a;font-weight:600;">${d.healthy_scans || 0}</span></p>
-                <p style="margin:2px 0;font-size:0.82rem;"><strong>Top Disease:</strong> ${topDiseaseName}</p>
-                
-                <div style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:6px;">
-                    <span style="font-size:0.75rem;font-weight:600;color:#64748b;">Disease Counts:</span>
-                    <ul style="margin:4px 0 8px 0;padding-left:14px;list-style-type:circle;">
-                        ${diseaseBreakdownHtml}
-                    </ul>
-                </div>
-
-                <button onclick="openBarangaySummaryModal('${d.barangay}')" style="width:100%;padding:6px;background:#166534;color:white;border:none;border-radius:6px;font-size:0.8rem;cursor:pointer;font-weight:600;">📋 View Barangay Report</button>
+        // 2. Create Floating HTML Badge Marker
+        const el = document.createElement('div');
+        el.className = 'maplibre-brgy-badge';
+        el.innerHTML = `
+            <div style="background:${style.fillColor}; color:white; font-size:10px; font-weight:700; padding:2px 7px; border-radius:12px; box-shadow:0 3px 10px rgba(0,0,0,0.35); border:1.5px solid white; white-space:nowrap; cursor:pointer; font-family:Poppins,sans-serif; display:flex; align-items:center; gap:4px; transform:translateY(-10px); transition:transform 0.15s ease;">
+                <span>${targetDiseased > 0 ? '⚠️' : '🌾'}</span>
+                <span>${escapeHtml(d.barangay)}</span>
+                ${targetDiseased > 0 ? `<span style="background:#dc2626; color:white; border-radius:50%; width:15px; height:15px; font-size:8.5px; display:inline-flex; align-items:center; justify-content:center; font-weight:800;">${targetDiseased}</span>` : ''}
             </div>
         `;
 
-        marker.bindPopup(popupHtml);
-        marker.addTo(heatmapMarkersGroup);
-        heatmapMarkersMap[d.barangay.toLowerCase()] = marker;
+        el.addEventListener('mouseenter', () => {
+            if (el.firstElementChild) el.firstElementChild.style.transform = 'translateY(-14px) scale(1.08)';
+        });
+        el.addEventListener('mouseleave', () => {
+            if (el.firstElementChild) el.firstElementChild.style.transform = 'translateY(-10px)';
+        });
+        el.addEventListener('click', () => {
+            showBarangay3DPopup({
+                barangay: d.barangay,
+                lat: lat,
+                lng: lng,
+                total_scans: d.total_scans || 0,
+                unhealthy_scans: diseasedTotal,
+                healthy_scans: d.healthy_scans || 0,
+                top_disease: topDiseaseName,
+                label: style.label,
+                color: style.color,
+                disease_counts: JSON.stringify(countsObj)
+            }, [lng, lat]);
+        });
+
+        const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+            .setLngLat([lng, lat])
+            .addTo(map3dInstance);
+
+        map3dHtmlMarkers.push(marker);
     });
+
+    const source = map3dInstance.getSource('barangay-3d-source');
+    if (source) {
+        source.setData({
+            type: 'FeatureCollection',
+            features: features
+        });
+    }
+}
+
+function showBarangay3DPopup(props, coords) {
+    if (!map3dInstance) return;
+    if (map3dActivePopup) map3dActivePopup.remove();
+
+    const countsObj = typeof props.disease_counts === 'string'
+        ? JSON.parse(props.disease_counts || '{}')
+        : (props.disease_counts || {});
+
+    const diseaseBreakdownHtml = Object.entries(countsObj)
+        .filter(([_, cnt]) => cnt > 0)
+        .map(([name, cnt]) => `<li style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:2px;"><span>${escapeHtml(name)}</span><strong style="color:#ef4444;">${cnt}</strong></li>`)
+        .join('') || '<li style="color:#16a34a;font-size:0.8rem;">No diseases reported</li>';
+
+    const popupHtml = `
+        <div style="font-family:Poppins,sans-serif;min-width:220px;padding:4px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <h4 style="margin:0;color:#166534;font-size:1.05rem;">📍 Brgy. ${escapeHtml(props.barangay)}</h4>
+            </div>
+            <div style="margin-bottom:8px;">
+                <span style="display:inline-block;padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;background:${props.color}20;color:${props.color};border:1px solid ${props.color};">${props.label}</span>
+            </div>
+            <p style="margin:2px 0;font-size:0.82rem;"><strong>Total Scans:</strong> ${props.total_scans || 0}</p>
+            <p style="margin:2px 0;font-size:0.82rem;"><strong>Unhealthy:</strong> <span style="color:#ef4444;font-weight:600;">${props.unhealthy_scans || 0}</span> | <strong>Healthy:</strong> <span style="color:#16a34a;font-weight:600;">${props.healthy_scans || 0}</span></p>
+            <p style="margin:2px 0;font-size:0.82rem;"><strong>Top Disease:</strong> ${escapeHtml(props.top_disease || 'None')}</p>
+            
+            <div style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:6px;">
+                <span style="font-size:0.75rem;font-weight:600;color:#64748b;">Disease Counts:</span>
+                <ul style="margin:4px 0 8px 0;padding-left:14px;list-style-type:circle;">
+                    ${diseaseBreakdownHtml}
+                </ul>
+            </div>
+
+            <button onclick="openBarangaySummaryModal('${escapeHtml(props.barangay)}')" style="width:100%;padding:8px;background:#166534;color:white;border:none;border-radius:8px;font-size:0.82rem;cursor:pointer;font-weight:700;font-family:Poppins,sans-serif;margin-top:4px;box-shadow:0 2px 6px rgba(22,101,52,0.25);">📋 View Barangay Report</button>
+        </div>
+    `;
+
+    map3dActivePopup = new maplibregl.Popup({
+        offset: [0, -12],
+        closeButton: true,
+        closeOnClick: true,
+        maxWidth: '300px'
+    })
+        .setLngLat(coords)
+        .setHTML(popupHtml)
+        .addTo(map3dInstance);
 }
 
 function filterHeatmapMarkers() {
     renderHeatmapMarkers();
 }
 
+function toggle3DView() {
+    if (!map3dInstance) return;
+    const currentPitch = map3dInstance.getPitch();
+    const btnText = document.getElementById('toggle3DText');
+    const btnIcon = document.getElementById('toggle3DIcon');
+
+    if (currentPitch > 15) {
+        // Smoothly transition to 2D Top-Down View
+        map3dInstance.easeTo({
+            pitch: 0,
+            bearing: 0,
+            duration: 900
+        });
+        is3DPerspectiveActive = false;
+        if (btnText) btnText.textContent = '2D View (0°)';
+        if (btnIcon) btnIcon.textContent = '🗺️';
+    } else {
+        // Smoothly transition to 3D Oblique View
+        map3dInstance.easeTo({
+            pitch: 52,
+            bearing: -15,
+            duration: 900
+        });
+        is3DPerspectiveActive = true;
+        if (btnText) btnText.textContent = '3D View (52°)';
+        if (btnIcon) btnIcon.textContent = '📐';
+    }
+}
+
+function reset3DView() {
+    if (!map3dInstance) return;
+    map3dInstance.flyTo({
+        center: BACNOTAN_CENTER,
+        zoom: 12.8,
+        pitch: 52,
+        bearing: -15,
+        essential: true,
+        duration: 1200
+    });
+    is3DPerspectiveActive = true;
+    const btnText = document.getElementById('toggle3DText');
+    const btnIcon = document.getElementById('toggle3DIcon');
+    if (btnText) btnText.textContent = '3D View (52°)';
+    if (btnIcon) btnIcon.textContent = '📐';
+}
+
 function zoomToBarangay(brgyName) {
     if (!brgyName) {
-        if (leafletMap) leafletMap.setView([16.7450, 120.3600], 13);
+        reset3DView();
         return;
     }
     const found = rawHeatmapData.find(d => d.barangay.toLowerCase() === brgyName.toLowerCase());
-    if (found && leafletMap) {
-        leafletMap.setView([found.lat, found.lng], 15);
-        const marker = heatmapMarkersMap[found.barangay.toLowerCase()];
-        if (marker) marker.openPopup();
+    if (found && map3dInstance) {
+        const lng = Number(found.lng || 120.3600);
+        const lat = Number(found.lat || 16.7450);
+
+        map3dInstance.flyTo({
+            center: [lng, lat],
+            zoom: 15.2,
+            pitch: 58,
+            bearing: -20,
+            essential: true,
+            duration: 1200
+        });
+
+        const diseasedTotal = (found.unhealthy_scans !== undefined ? found.unhealthy_scans : found.diseased_scans) || 0;
+        const topDiseaseName = found.top_disease || found.most_common_disease || 'None';
+        const style = getConcentrationStyle(found.total_scans || 0, diseasedTotal);
+
+        setTimeout(() => {
+            showBarangay3DPopup({
+                barangay: found.barangay,
+                lat: lat,
+                lng: lng,
+                total_scans: found.total_scans || 0,
+                unhealthy_scans: diseasedTotal,
+                healthy_scans: found.healthy_scans || 0,
+                top_disease: topDiseaseName,
+                label: style.label,
+                color: style.color,
+                disease_counts: JSON.stringify(found.disease_counts || found.diseases || {})
+            }, [lng, lat]);
+        }, 800);
     }
 }
 
