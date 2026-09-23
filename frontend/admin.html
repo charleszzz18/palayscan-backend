@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PALAYSCAN | Admin Panel</title>
-    <link rel="stylesheet" href="style.css?v=15">
+    <link rel="stylesheet" href="style.css?v=16">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -152,7 +152,7 @@
                 <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px;">
                     <label for="heatmapDiseaseFilter" style="font-weight: 600; font-size: 0.85rem; color: #334155; white-space: nowrap;">Target Disease:</label>
                     <select id="heatmapDiseaseFilter" class="admin-filter-select" onchange="filterHeatmapMarkers()" style="width: 100%;">
-                        <option value="">All Detected Diseases</option>
+                        <option value="">All Detected Diseases (All 47 Barangays)</option>
                         <option value="Blight">Bacterial Leaf Blight</option>
                         <option value="Blast">Rice Blast</option>
                         <option value="Brown Spot">Brown Spot</option>
@@ -173,28 +173,28 @@
                     <div class="admin-stat-icon">📍</div>
                     <div class="admin-stat-info">
                         <span id="hmTotalBarangays">47</span>
-                        <p>Barangays Monitored</p>
+                        <p id="hmTotalBarangaysLabel">Barangays Monitored</p>
                     </div>
                 </div>
                 <div class="admin-stat-card diseased">
                     <div class="admin-stat-icon">🔥</div>
                     <div class="admin-stat-info">
                         <span id="hmHotspotBarangay" style="font-size: 1.2rem;">—</span>
-                        <p>Highest Concentration</p>
+                        <p id="hmHotspotBarangayLabel">Highest Concentration</p>
                     </div>
                 </div>
                 <div class="admin-stat-card healthy">
                     <div class="admin-stat-icon">🛡️</div>
                     <div class="admin-stat-info">
                         <span id="hmCleanBarangays">—</span>
-                        <p>Zero Unhealthy Reported</p>
+                        <p id="hmCleanBarangaysLabel">Zero Unhealthy Reported</p>
                     </div>
                 </div>
                 <div class="admin-stat-card">
                     <div class="admin-stat-icon">🌾</div>
                     <div class="admin-stat-info">
                         <span id="hmTotalCasesMapped">—</span>
-                        <p>Total Scans Mapped</p>
+                        <p id="hmTotalCasesMappedLabel">Total Scans Mapped</p>
                     </div>
                 </div>
             </div>
@@ -204,29 +204,39 @@
                 <div id="barangayHeatmap" style="height: 540px; width: 100%; border-radius: 14px; z-index: 1; overflow: hidden; position: relative;"></div>
 
                 <!-- Municipal Scope Exclusive Badge -->
-                <div style="position: absolute; top: 28px; left: 28px; z-index: 10; background: rgba(15,23,42,0.92); backdrop-filter: blur(8px); border: 1.5px solid rgba(34,197,94,0.4); border-radius: 10px; padding: 7px 13px; color: white; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); pointer-events: none; font-family: Poppins, sans-serif;">
-                    <span style="font-size: 1.15rem;">🇵🇭</span>
+                <div class="heatmap-scope-badge">
+                    <span class="scope-flag">🇵🇭</span>
                     <div>
-                        <div style="font-size: 0.82rem; font-weight: 700; letter-spacing: 0.4px; color: #4ade80; line-height: 1.2;">BACNOTAN, LA UNION</div>
-                        <div style="font-size: 0.68rem; color: #cbd5e1; font-weight: 500; line-height: 1.1;">Exclusive Municipal 3D Scope</div>
+                        <div class="scope-title">BACNOTAN, LA UNION</div>
+                        <div class="scope-sub">Exclusive Municipal 3D Scope</div>
+                    </div>
+                </div>
+
+                <!-- Clean / Zero-Cases Floating Status Pill -->
+                <div id="hmEmptyStateOverlay" style="display: none; position: absolute; bottom: 35px; right: 28px; z-index: 10; background: rgba(15,23,42,0.92); backdrop-filter: blur(8px); border: 1.5px solid #22c55e; border-radius: 10px; padding: 10px 16px; color: white; font-family: Poppins, sans-serif; box-shadow: 0 4px 15px rgba(0,0,0,0.35); pointer-events: none;">
+                    <div style="font-size: 0.88rem; font-weight: 700; color: #4ade80; display: flex; align-items: center; gap: 6px;">
+                        <span>🛡️</span> All 47 Barangays Safe
+                    </div>
+                    <div id="hmEmptyStateText" style="font-size: 0.74rem; color: #cbd5e1; margin-top: 2px;">
+                        No cases of this disease detected in Bacnotan.
                     </div>
                 </div>
 
                 <!-- 3D Camera Controls Overlay -->
-                <div class="map-3d-controls" style="position: absolute; top: 28px; right: 28px; z-index: 10; display: flex; flex-direction: column; gap: 8px;">
+                <div class="map-3d-controls">
                     <button type="button" id="btnToggle3D" onclick="toggle3DView()" title="Toggle 2D / 3D Perspective" style="background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 7px 12px; font-weight: 700; font-size: 0.78rem; color: #1e293b; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 6px; font-family: Poppins, sans-serif;">
                         <span id="toggle3DIcon">📐</span> <span id="toggle3DText">3D View (52°)</span>
                     </button>
                     <button type="button" onclick="reset3DView()" title="Reset Camera to Bacnotan Center" style="background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 7px 12px; font-weight: 700; font-size: 0.78rem; color: #166534; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 6px; font-family: Poppins, sans-serif;">
                         🔄 Reset Camera
                     </button>
-                    <div style="background: rgba(15,23,42,0.85); backdrop-filter: blur(6px); color: #f8fafc; font-size: 0.68rem; padding: 4px 8px; border-radius: 6px; text-align: center; font-weight: 600; font-family: Poppins, sans-serif; pointer-events: none;">
+                    <div class="map-rotate-hint">
                         🖱️ Right-Click + Drag to Rotate
                     </div>
                 </div>
 
                 <!-- Map Legend -->
-                <div class="heatmap-legend" style="bottom: 28px; left: 28px;">
+                <div class="heatmap-legend">
                     <h4 style="display: flex; align-items: center; gap: 6px;">
                         <span>🏛️</span> 3D Pillar Height & Status
                     </h4>
@@ -769,6 +779,6 @@
 </div>
 
 <script src="api_config.js"></script>
-<script src="admin.js?v=16"></script>
+<script src="admin.js?v=18"></script>
 </body>
 </html>

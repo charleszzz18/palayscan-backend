@@ -808,7 +808,9 @@ async function loadHeatmapData() {
         rawHeatmapData = await res.json();
 
         populateBarangayDropdowns();
-        updateHeatmapMetrics();
+        const diseaseFilter = (document.getElementById('heatmapDiseaseFilter')?.value || '').trim().toLowerCase();
+        updateHeatmapMetrics(diseaseFilter);
+        updateFocusBarangayDropdown(diseaseFilter);
         initOrUpdateMap();
         renderHeatmapMarkers();
         renderBarangayTable();
@@ -817,37 +819,87 @@ async function loadHeatmapData() {
     }
 }
 
-function updateHeatmapMetrics() {
+function updateHeatmapMetrics(diseaseFilter = '') {
     if (!rawHeatmapData || !rawHeatmapData.length) return;
+
+    const filter = (diseaseFilter || document.getElementById('heatmapDiseaseFilter')?.value || '').trim().toLowerCase();
+    const filterSelect = document.getElementById('heatmapDiseaseFilter');
+    const selectedText = filterSelect && filterSelect.selectedIndex >= 0 ? filterSelect.options[filterSelect.selectedIndex].text : '';
 
     let totalCases = 0;
     let cleanCount = 0;
+    let affectedCount = 0;
     let maxCases = -1;
-    let hotspotBrgy = 'None';
+    let hotspotBrgy = 'None Detected';
 
-    rawHeatmapData.forEach(d => {
-        totalCases += (d.total_scans || 0);
-        const diseased = (d.unhealthy_scans !== undefined ? d.unhealthy_scans : d.diseased_scans) || 0;
-        if (diseased === 0) {
-            cleanCount++;
+    const validBarangays = rawHeatmapData.filter(d => d.barangay && d.barangay.toLowerCase() !== 'bacnotan' && d.barangay.toLowerCase() !== 'unknown');
+
+    validBarangays.forEach(d => {
+        let count = 0;
+        if (!filter) {
+            // "All Detected Diseases": count any unhealthy scan
+            count = (d.unhealthy_scans !== undefined ? d.unhealthy_scans : d.diseased_scans) || 0;
+        } else {
+            // Specific target disease: count only that disease
+            const counts = d.disease_counts || d.diseases || {};
+            for (const [k, v] of Object.entries(counts)) {
+                const kLower = k.toLowerCase();
+                if (kLower === filter || kLower.includes(filter) || filter.includes(kLower)) {
+                    count += Number(v || 0);
+                }
+            }
         }
-        if (diseased > maxCases) {
-            maxCases = diseased;
-            hotspotBrgy = `${d.barangay} (${diseased})`;
+
+        totalCases += count;
+        if (count > 0) {
+            affectedCount++;
+            if (count > maxCases) {
+                maxCases = count;
+                hotspotBrgy = `${d.barangay} (${count})`;
+            }
+        } else {
+            cleanCount++;
         }
     });
 
     const totalEl = document.getElementById('hmTotalBarangays');
-    if (totalEl) totalEl.textContent = rawHeatmapData.length;
+    const totalLabel = document.getElementById('hmTotalBarangaysLabel');
+    if (totalEl) {
+        if (!filter) {
+            totalEl.textContent = validBarangays.length;
+            if (totalLabel) totalLabel.textContent = 'Barangays Monitored';
+        } else {
+            totalEl.textContent = `${affectedCount} / ${validBarangays.length}`;
+            if (totalLabel) totalLabel.textContent = 'Affected Barangays';
+        }
+    }
 
     const hotspotEl = document.getElementById('hmHotspotBarangay');
-    if (hotspotEl) hotspotEl.textContent = maxCases > 0 ? hotspotBrgy : 'None Detected';
+    const hotspotLabel = document.getElementById('hmHotspotBarangayLabel');
+    if (hotspotEl) {
+        hotspotEl.textContent = maxCases > 0 ? hotspotBrgy : 'None Detected';
+        if (hotspotLabel) {
+            hotspotLabel.textContent = filter ? `${selectedText} Hotspot` : 'Highest Concentration';
+        }
+    }
 
     const cleanEl = document.getElementById('hmCleanBarangays');
-    if (cleanEl) cleanEl.textContent = `${cleanCount} / ${rawHeatmapData.length}`;
+    const cleanLabel = document.getElementById('hmCleanBarangaysLabel');
+    if (cleanEl) {
+        cleanEl.textContent = `${cleanCount} / ${validBarangays.length}`;
+        if (cleanLabel) {
+            cleanLabel.textContent = filter ? `Free of ${selectedText}` : 'Zero Unhealthy Reported';
+        }
+    }
 
     const casesEl = document.getElementById('hmTotalCasesMapped');
-    if (casesEl) casesEl.textContent = totalCases;
+    const casesLabel = document.getElementById('hmTotalCasesMappedLabel');
+    if (casesEl) {
+        casesEl.textContent = totalCases;
+        if (casesLabel) {
+            casesLabel.textContent = filter ? `Total ${selectedText} Cases` : 'Total Scans Mapped';
+        }
+    }
 }
 
 function initOrUpdateMap() {
@@ -905,6 +957,17 @@ function initOrUpdateMap() {
         map3dInstance.on('load', () => {
             setup3DLayers();
             renderHeatmapMarkers();
+        });
+
+        // Adaptive zoom detection for mobile view (auto-expands names when zoomed in)
+        map3dInstance.on('zoom', () => {
+            const mapContainer = document.getElementById('barangayHeatmap');
+            if (!mapContainer) return;
+            if (map3dInstance.getZoom() >= 14.6) {
+                mapContainer.classList.add('map-zoomed-in');
+            } else {
+                mapContainer.classList.remove('map-zoomed-in');
+            }
         });
     } else {
         setTimeout(() => {
@@ -1064,6 +1127,8 @@ function renderHeatmapMarkers() {
     const validBarangays = rawHeatmapData.filter(d => d.barangay && d.barangay.toLowerCase() !== 'bacnotan' && d.barangay.toLowerCase() !== 'unknown');
 
     const features = [];
+    const emptyOverlay = document.getElementById('hmEmptyStateOverlay');
+    const emptyText = document.getElementById('hmEmptyStateText');
 
     validBarangays.forEach(d => {
         const lat = Number(d.lat || 16.7450);
@@ -1075,14 +1140,18 @@ function renderHeatmapMarkers() {
 
         if (diseaseFilter) {
             const counts = d.disease_counts || d.diseases || {};
-            const matchedKey = Object.keys(counts).find(k => {
+            let matchedDiseased = 0;
+            for (const [k, v] of Object.entries(counts)) {
                 const kLower = k.toLowerCase();
-                return kLower === diseaseFilter || kLower.includes(diseaseFilter) || diseaseFilter.includes(kLower);
-            });
-            targetCount = matchedKey ? (counts[matchedKey] || 0) : 0;
-            targetDiseased = targetCount;
+                if (kLower === diseaseFilter || kLower.includes(diseaseFilter) || diseaseFilter.includes(kLower)) {
+                    matchedDiseased += Number(v || 0);
+                }
+            }
+            targetCount = matchedDiseased;
+            targetDiseased = matchedDiseased;
 
-            // When a specific target disease is selected, only show barangays with that disease!
+            // When a specific target disease is selected, ONLY show barangays with that disease!
+            // Clean/unaffected barangays are completely hidden from the map.
             if (targetDiseased <= 0) {
                 return;
             }
@@ -1115,22 +1184,17 @@ function renderHeatmapMarkers() {
         });
 
         // 2. Create Floating HTML Badge Marker
+        const isDiseased = targetDiseased > 0;
         const el = document.createElement('div');
-        el.className = 'maplibre-brgy-badge';
+        el.className = `maplibre-brgy-badge ${isDiseased ? 'badge-diseased' : 'badge-clean'}`;
         el.innerHTML = `
-            <div style="background:${style.fillColor}; color:white; font-size:10px; font-weight:700; padding:2px 7px; border-radius:12px; box-shadow:0 3px 10px rgba(0,0,0,0.35); border:1.5px solid white; white-space:nowrap; cursor:pointer; font-family:Poppins,sans-serif; display:flex; align-items:center; gap:4px; transform:translateY(-10px); transition:transform 0.15s ease;">
-                <span>${targetDiseased > 0 ? '⚠️' : '🌾'}</span>
-                <span>${escapeHtml(d.barangay)}</span>
-                ${targetDiseased > 0 ? `<span style="background:#dc2626; color:white; border-radius:50%; width:15px; height:15px; font-size:8.5px; display:inline-flex; align-items:center; justify-content:center; font-weight:800;">${targetDiseased}</span>` : ''}
+            <div class="badge-pill" style="--marker-color:${style.fillColor};" title="${escapeHtml(d.barangay)} (${isDiseased ? targetDiseased + ' diseased' : 'Clean / Safe'})">
+                <span class="badge-icon">${isDiseased ? '⚠️' : '🌾'}</span>
+                <span class="badge-text">${escapeHtml(d.barangay)}</span>
+                ${isDiseased ? `<span class="badge-count">${targetDiseased}</span>` : ''}
             </div>
         `;
 
-        el.addEventListener('mouseenter', () => {
-            if (el.firstElementChild) el.firstElementChild.style.transform = 'translateY(-14px) scale(1.08)';
-        });
-        el.addEventListener('mouseleave', () => {
-            if (el.firstElementChild) el.firstElementChild.style.transform = 'translateY(-10px)';
-        });
         el.addEventListener('click', () => {
             showBarangay3DPopup({
                 barangay: d.barangay,
@@ -1159,6 +1223,18 @@ function renderHeatmapMarkers() {
             type: 'FeatureCollection',
             features: features
         });
+    }
+
+    // Toggle clean / zero-case overlay
+    if (emptyOverlay) {
+        if (diseaseFilter && features.length === 0) {
+            emptyOverlay.style.display = 'block';
+            const filterSelect = document.getElementById('heatmapDiseaseFilter');
+            const selectedText = filterSelect && filterSelect.selectedIndex >= 0 ? filterSelect.options[filterSelect.selectedIndex].text : diseaseFilter;
+            if (emptyText) emptyText.textContent = `Zero detected cases of ${selectedText} across all 47 barangays.`;
+        } else {
+            emptyOverlay.style.display = 'none';
+        }
     }
 }
 
@@ -1214,8 +1290,94 @@ function filterHeatmapMarkers() {
         map3dActivePopup.remove();
         map3dActivePopup = null;
     }
+    const diseaseFilter = (document.getElementById('heatmapDiseaseFilter')?.value || '').trim().toLowerCase();
+
     renderHeatmapMarkers();
     renderBarangayTable();
+    updateHeatmapMetrics(diseaseFilter);
+    updateFocusBarangayDropdown(diseaseFilter);
+
+    // Smart Camera Navigation
+    if (!diseaseFilter) {
+        // "All Detected Diseases": Smoothly reset to the full municipal 3D view showing all 47 barangays
+        reset3DView();
+    } else {
+        const validBarangays = rawHeatmapData.filter(d => d.barangay && d.barangay.toLowerCase() !== 'bacnotan' && d.barangay.toLowerCase() !== 'unknown');
+        const affected = validBarangays.filter(d => {
+            const counts = d.disease_counts || d.diseases || {};
+            for (const [k, v] of Object.entries(counts)) {
+                const kLower = k.toLowerCase();
+                if ((kLower === diseaseFilter || kLower.includes(diseaseFilter) || diseaseFilter.includes(kLower)) && Number(v || 0) > 0) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        if (affected.length === 1 && map3dInstance) {
+            // Automatically focus smoothly on the single affected barangay (e.g. Paagan for Blight)
+            zoomToBarangay(affected[0].barangay);
+        } else if (affected.length > 1 && map3dInstance) {
+            map3dInstance.easeTo({
+                center: BACNOTAN_CENTER,
+                zoom: 13.0,
+                pitch: 52,
+                bearing: -15,
+                duration: 900
+            });
+        }
+    }
+}
+
+function updateFocusBarangayDropdown(diseaseFilter = '') {
+    const heatSelect = document.getElementById('heatmapBarangaySelect');
+    if (!heatSelect) return;
+
+    const filter = (diseaseFilter || document.getElementById('heatmapDiseaseFilter')?.value || '').trim().toLowerCase();
+    const validBarangays = rawHeatmapData.filter(d => d.barangay && d.barangay.toLowerCase() !== 'bacnotan' && d.barangay.toLowerCase() !== 'unknown');
+
+    let matching = validBarangays;
+    if (filter) {
+        matching = validBarangays.filter(d => {
+            const counts = d.disease_counts || d.diseases || {};
+            for (const [k, v] of Object.entries(counts)) {
+                const kLower = k.toLowerCase();
+                if ((kLower === filter || kLower.includes(filter) || filter.includes(kLower)) && Number(v || 0) > 0) {
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+
+    heatSelect.innerHTML = '';
+    if (!filter) {
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = '-- All 47 Barangays --';
+        heatSelect.appendChild(defaultOpt);
+
+        validBarangays.map(b => b.barangay).sort().forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b;
+            opt.textContent = b;
+            heatSelect.appendChild(opt);
+        });
+    } else {
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = matching.length > 0 
+            ? `-- Affected (${matching.length} Barangay${matching.length > 1 ? 's' : ''}) --` 
+            : '-- No Barangays Affected --';
+        heatSelect.appendChild(defaultOpt);
+
+        matching.map(b => b.barangay).sort().forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b;
+            opt.textContent = `📍 ${b}`;
+            heatSelect.appendChild(opt);
+        });
+    }
 }
 
 function toggle3DView() {
@@ -1269,7 +1431,7 @@ function zoomToBarangay(brgyName) {
         reset3DView();
         return;
     }
-    const found = rawHeatmapData.find(d => d.barangay.toLowerCase() === brgyName.toLowerCase());
+    const found = rawHeatmapData.find(d => d.barangay && d.barangay.toLowerCase() === brgyName.toLowerCase());
     if (found && map3dInstance) {
         const lng = Number(found.lng || 120.3600);
         const lat = Number(found.lat || 16.7450);
@@ -1315,6 +1477,8 @@ function renderBarangayTable() {
 
     const query = (document.getElementById('barangayTableSearch')?.value || '').toLowerCase();
     const diseaseFilter = (document.getElementById('heatmapDiseaseFilter')?.value || '').trim().toLowerCase();
+    const filterSelect = document.getElementById('heatmapDiseaseFilter');
+    const selectedText = filterSelect && filterSelect.selectedIndex >= 0 ? filterSelect.options[filterSelect.selectedIndex].text : diseaseFilter;
 
     let list = rawHeatmapData
         .filter(b => b.barangay && b.barangay.toLowerCase() !== 'bacnotan' && b.barangay.toLowerCase() !== 'unknown')
@@ -1323,12 +1487,14 @@ function renderBarangayTable() {
     if (diseaseFilter) {
         list = list.filter(b => {
             const counts = b.disease_counts || b.diseases || {};
-            const matchedKey = Object.keys(counts).find(k => {
+            let matched = 0;
+            for (const [k, v] of Object.entries(counts)) {
                 const kLower = k.toLowerCase();
-                return kLower === diseaseFilter || kLower.includes(diseaseFilter) || diseaseFilter.includes(kLower);
-            });
-            const count = matchedKey ? (counts[matchedKey] || 0) : 0;
-            return count > 0;
+                if (kLower === diseaseFilter || kLower.includes(diseaseFilter) || diseaseFilter.includes(kLower)) {
+                    matched += Number(v || 0);
+                }
+            }
+            return matched > 0;
         });
     }
 
@@ -1339,25 +1505,37 @@ function renderBarangayTable() {
     });
 
     const rows = list.map(b => {
-        const diseased = (b.unhealthy_scans !== undefined ? b.unhealthy_scans : b.diseased_scans) || 0;
+        let diseased = (b.unhealthy_scans !== undefined ? b.unhealthy_scans : b.diseased_scans) || 0;
+        if (diseaseFilter) {
+            const counts = b.disease_counts || b.diseases || {};
+            let targetCount = 0;
+            for (const [k, v] of Object.entries(counts)) {
+                const kLower = k.toLowerCase();
+                if (kLower === diseaseFilter || kLower.includes(diseaseFilter) || diseaseFilter.includes(kLower)) {
+                    targetCount += Number(v || 0);
+                }
+            }
+            diseased = targetCount;
+        }
+
         const topDisease = b.top_disease || b.most_common_disease || 'None';
         const style = getConcentrationStyle(b.total_scans || 0, diseased);
         return `
             <tr>
-                <td><strong>${b.barangay}</strong></td>
+                <td><strong>${escapeHtml(b.barangay)}</strong></td>
                 <td>${b.total_scans || 0}</td>
                 <td><strong style="color:${diseased > 0 ? '#dc2626' : '#64748b'};">${diseased}</strong></td>
                 <td><strong style="color:${(b.healthy_scans || 0) > 0 ? '#16a34a' : '#64748b'};">${b.healthy_scans || 0}</strong></td>
-                <td>${topDisease}</td>
+                <td>${escapeHtml(topDisease)}</td>
                 <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;background:${style.fillColor}20;color:${style.color};border:1px solid ${style.color};">${style.label}</span></td>
                 <td>
-                    <button onclick="openBarangaySummaryModal('${b.barangay}')" style="padding:4px 10px;background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600;">📋 Report</button>
+                    <button onclick="openBarangaySummaryModal('${escapeHtml(b.barangay)}')" style="padding:4px 10px;background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600;">📋 Report</button>
                 </td>
             </tr>
         `;
     }).join('');
 
-    tbody.innerHTML = rows || `<tr><td colspan="7" style="text-align:center;padding:20px;color:#94a3b8;">${diseaseFilter ? 'No barangays detected with ' + escapeHtml(diseaseFilter) + '.' : 'No matching barangay found.'}</td></tr>`;
+    tbody.innerHTML = rows || `<tr><td colspan="7" style="text-align:center;padding:26px;color:${diseaseFilter ? '#16a34a' : '#94a3b8'};font-weight:600;">${diseaseFilter ? '🛡️ Zero cases: All 47 barangays in Bacnotan are currently free from ' + escapeHtml(selectedText) + '.' : 'No matching barangay found.'}</td></tr>`;
 }
 
 function filterBarangayTable() {

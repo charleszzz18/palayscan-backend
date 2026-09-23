@@ -584,7 +584,17 @@ def get_barangay_heatmap_data():
                     if d_norm in stat["diseases"]:
                         stat["diseases"][d_norm] += 1
                     else:
-                        stat["diseases"]["Others"] += 1
+                        d_low = d.lower()
+                        if "blight" in d_low:
+                            stat["diseases"]["Blight"] += 1
+                        elif "blast" in d_low:
+                            stat["diseases"]["Blast"] += 1
+                        elif "brown" in d_low or "spot" in d_low:
+                            stat["diseases"]["Brown Spot"] += 1
+                        elif "streak" in d_low or "strip" in d_low:
+                            stat["diseases"]["Leaf Streak"] += 1
+                        else:
+                            stat["diseases"]["Others"] += 1
 
         for b_name, stat in barangay_stats.items():
             d_counts = stat["diseases"]

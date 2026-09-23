@@ -3164,36 +3164,80 @@ main {
 /* ==========================================================================
    DISEASE HEAT MAP & AUDIT TRAIL & BACKUP STYLES
    ========================================================================== */
+.heatmap-scope-badge {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    z-index: 10;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(34, 197, 94, 0.4);
+    border-radius: 10px;
+    padding: 7px 13px;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+    font-family: 'Poppins', sans-serif;
+}
+.scope-flag { font-size: 1.15rem; }
+.scope-title { font-size: 0.82rem; font-weight: 700; letter-spacing: 0.4px; color: #4ade80; line-height: 1.2; }
+.scope-sub { font-size: 0.68rem; color: #cbd5e1; font-weight: 500; line-height: 1.1; }
+
+.map-3d-controls {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.map-rotate-hint {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(6px);
+    color: #f8fafc;
+    font-size: 0.68rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: 600;
+    font-family: 'Poppins', sans-serif;
+    pointer-events: none;
+}
+
 .heatmap-legend {
     position: absolute;
-    bottom: 30px;
-    right: 30px;
+    bottom: 24px;
+    left: 24px;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(8px);
-    padding: 12px 16px;
+    padding: 10px 14px;
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
+    z-index: 10;
     border: 1px solid rgba(0, 0, 0, 0.08);
     font-family: 'Poppins', sans-serif;
 }
 
 .heatmap-legend h4 {
-    margin: 0 0 8px 0;
-    font-size: 0.82rem;
+    margin: 0 0 6px 0;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #1e293b;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.4px;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     color: #475569;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     font-weight: 500;
 }
 
@@ -3202,8 +3246,8 @@ main {
 }
 
 .legend-dot {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     display: inline-block;
     box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
@@ -3257,20 +3301,198 @@ main {
     transform: translateY(0);
 }
 
+/* Floating HTML Badges */
+.maplibre-brgy-badge {
+    user-select: none;
+}
+
+.badge-pill {
+    background: var(--marker-color, #22c55e);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 12px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+    border: 1.5px solid white;
+    white-space: nowrap;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transform: translateY(-10px);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.maplibre-brgy-badge:hover .badge-pill {
+    transform: translateY(-14px) scale(1.08);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+}
+
+.badge-count {
+    background: #dc2626;
+    color: white;
+    border-radius: 50%;
+    width: 15px;
+    height: 15px;
+    font-size: 8.5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PHONE & TABLET RESPONSIVE VIEW (UNCLUTTERED HEAT MAP)
+   ═══════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
     #barangayHeatmap {
         height: 400px !important;
+        border-radius: 10px !important;
     }
+
+    .admin-chart-card {
+        padding: 10px !important;
+    }
+
+    /* 1. Prevent Top Overlays Colliding on Mobile Screens */
+    .heatmap-scope-badge {
+        top: 8px !important;
+        left: 8px !important;
+        padding: 4px 7px !important;
+        gap: 5px !important;
+        border-radius: 8px !important;
+        max-width: 130px;
+    }
+    .scope-flag { font-size: 0.9rem !important; }
+    .scope-title { font-size: 0.68rem !important; }
+    .scope-sub { display: none !important; }
+
     .map-3d-controls {
-        top: 14px !important;
-        right: 14px !important;
+        top: 8px !important;
+        right: 8px !important;
+        gap: 5px !important;
     }
+    .map-3d-controls button {
+        padding: 4px 8px !important;
+        font-size: 0.72rem !important;
+        border-radius: 6px !important;
+    }
+    .map-rotate-hint {
+        display: none !important; /* Hide mouse instructions on mobile touch */
+    }
+
+    /* 2. Unclutter 47 Barangay Badges on Mobile Screen */
+    /* Clean/healthy barangays: hide the wide text so markers don't overlap into a giant blob */
+    .maplibre-brgy-badge.badge-clean .badge-text {
+        display: none !important;
+    }
+    .maplibre-brgy-badge.badge-clean .badge-pill {
+        padding: 0 !important;
+        width: 13px !important;
+        height: 13px !important;
+        min-width: 13px !important;
+        border-radius: 50% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transform: translateY(-5px) !important;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+        border: 1.5px solid white !important;
+    }
+    .maplibre-brgy-badge.badge-clean .badge-icon {
+        font-size: 7px !important;
+        line-height: 1 !important;
+        margin: 0 !important;
+    }
+
+    /* Affected / Diseased Hotspot barangays: prominently visible alert badge */
+    .maplibre-brgy-badge.badge-diseased .badge-pill {
+        padding: 2px 6px !important;
+        font-size: 9px !important;
+        transform: translateY(-8px) !important;
+        box-shadow: 0 3px 10px rgba(220, 38, 38, 0.45) !important;
+        animation: pulseWarningMobile 2s infinite ease-in-out;
+    }
+
+    /* If user zooms in close on mobile, reveal full names */
+    .map-zoomed-in .maplibre-brgy-badge.badge-clean .badge-text {
+        display: inline-block !important;
+        font-size: 8.5px !important;
+    }
+    .map-zoomed-in .maplibre-brgy-badge.badge-clean .badge-pill {
+        width: auto !important;
+        height: auto !important;
+        padding: 2px 6px !important;
+        border-radius: 10px !important;
+    }
+
+    /* 3. Legend on Mobile: neat compact bar below the map canvas */
     .heatmap-legend {
-        position: static;
-        margin-top: 12px;
-        box-shadow: none;
-        border: 1px solid #e2e8f0;
+        position: static !important;
+        margin-top: 10px !important;
+        box-shadow: none !important;
+        border: 1px solid #e2e8f0 !important;
+        padding: 8px 12px !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 6px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
     }
+    .heatmap-legend h4 {
+        margin: 0 0 2px 0 !important;
+        font-size: 0.72rem !important;
+        width: 100% !important;
+    }
+    .legend-item {
+        font-size: 0.7rem !important;
+        gap: 5px !important;
+        margin-bottom: 0 !important;
+    }
+    .legend-dot {
+        width: 9px !important;
+        height: 9px !important;
+    }
+
+    /* 4. Controls & Filters on Phone */
+    .admin-filter-container {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    .admin-filter-container > div {
+        width: 100% !important;
+        min-width: 100% !important;
+    }
+    .admin-filter-select {
+        height: 42px !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* 5. Summary Metrics 2x2 Grid on Phone */
+    .admin-stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+        margin-bottom: 14px !important;
+    }
+    .admin-stat-card {
+        padding: 10px 12px !important;
+        gap: 8px !important;
+    }
+    .admin-stat-icon {
+        font-size: 1.25rem !important;
+    }
+    .admin-stat-info span {
+        font-size: 1.15rem !important;
+    }
+    .admin-stat-info p {
+        font-size: 0.68rem !important;
+    }
+
+    /* 6. Diagnostics card headers */
     .diag-card-header {
         flex-direction: column;
         align-items: flex-start;
@@ -3282,6 +3504,17 @@ main {
     .diag-header-action .info-btn {
         width: 100%;
         text-align: center;
+    }
+}
+
+@keyframes pulseWarningMobile {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6);
+        transform: translateY(-8px) scale(1);
+    }
+    50% {
+        box-shadow: 0 0 0 5px rgba(220, 38, 38, 0);
+        transform: translateY(-10px) scale(1.06);
     }
 }
 
