@@ -22,8 +22,8 @@ if (localStorage.getItem('palayscan_token')) {
 window.addEventListener('pageshow', function() {
     const form = document.getElementById('loginForm');
     if (form) form.reset();
-    const emailField = document.getElementById('email');
-    if (emailField) emailField.value = '';
+    const userInput = document.getElementById('username');
+    if (userInput) userInput.value = '';
     const passField = document.getElementById('password');
     if (passField) passField.value = '';
 });
@@ -34,7 +34,7 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
     e.preventDefault(); // Stop the form from performing a normal browser page reload
 
     // Extract user inputs from the text fields
-    const email    = document.getElementById('email').value.trim();
+    const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
     
     // Grab references to button labels, loaders, and error display boxes
@@ -54,7 +54,7 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         const response = await fetch(`${API_BASE_URL}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }) // Send credentials as JSON payload
+            body: JSON.stringify({ username, password }) // Send credentials as JSON payload
         });
 
         const data = await response.json(); // Parse the JSON response from Flask

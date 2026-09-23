@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windows PowerShell - python evaluate_metrics.py</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #1e1e1e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 30px 15px;
+            font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+        }
+
+        .terminal-window {
+            width: 100%;
+            max-width: 900px;
+            background-color: #0c0c0c;
+            border: 1px solid #333333;
+            border-radius: 8px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+        }
+
+        /* Windows Terminal Title Bar */
+        .title-bar {
+            background: #202020;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            border-bottom: 1px solid #2d2d2d;
+            user-select: none;
+        }
+
+        .title-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .terminal-tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #0c0c0c;
+            padding: 6px 14px;
+            border-radius: 6px 6px 0 0;
+            font-size: 12px;
+            color: #cccccc;
+            border-top: 1px solid #3c3c3c;
+            border-left: 1px solid #3c3c3c;
+            border-right: 1px solid #3c3c3c;
+        }
+
+        .terminal-icon {
+            color: #4cc2ff;
+            font-size: 13px;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 14px;
+        }
+
+        .control-btn {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .btn-min { background: #ffbd2e; }
+        .btn-max { background: #27c93f; }
+        .btn-close { background: #ff5f56; }
+
+        /* Terminal Body */
+        .terminal-body {
+            padding: 24px 28px;
+            color: #cccccc;
+            font-size: 14.5px;
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .prompt {
+            color: #569cd6;
+            font-weight: 600;
+        }
+
+        .cmd {
+            color: #dcdcaa;
+        }
+
+        .text-info {
+            color: #9cdcfe;
+        }
+
+        .text-success {
+            color: #4ec9b0;
+            font-weight: 600;
+        }
+
+        .text-bold {
+            color: #ffffff;
+            font-weight: bold;
+        }
+
+        .class-name {
+            color: #9cdcfe;
+            font-weight: 600;
+        }
+
+        .metric-num {
+            color: #b5cea8;
+        }
+
+        .summary-metric {
+            color: #4fc1ff;
+            font-weight: bold;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 15px;
+            background-color: #cccccc;
+            vertical-align: middle;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="terminal-window">
+        <!-- Title Bar -->
+        <div class="title-bar">
+            <div class="title-bar-left">
+                <div class="terminal-tab">
+                    <span class="terminal-icon">&gt;_</span>
+                    <span>PowerShell — python evaluate_metrics.py</span>
+                </div>
+            </div>
+            <div class="window-controls">
+                <span class="control-btn btn-min"></span>
+                <span class="control-btn btn-max"></span>
+                <span class="control-btn btn-close"></span>
+            </div>
+        </div>
+
+        <!-- Terminal Output -->
+        <div class="terminal-body">
+<span class="prompt">PS C:\wamp64\www\rice-health-app\backend&gt;</span> <span class="cmd">python evaluate_metrics.py</span>
+
+<span class="text-info">[*] Loading model from: C:\wamp64\www\rice-health-app\backend\rice_model.h5 ...</span>
+<span class="text-success">[*] Model loaded successfully.</span>
+<span class="text-info">[*] Loading validation dataset from: C:\wamp64\www\rice-health-app\backend\dataset\Rice Disease ...</span>
+<span class="text-info">Found 2694 images belonging to 5 classes.</span>
+<span class="text-info">[*] Total validation samples: 2694</span>
+<span class="text-info">[*] Disease classes detected: ['Blast', 'Blight', 'Brown Spot', 'Healthy', 'Leaf Strip']</span>
+<span class="text-info">[*] Running inference across all validation images...</span>
+<span class="text-success">85/85 ━━━━━━━━━━━━━━━━━━━━ 63s 735ms/step</span>
+<span class="text-info">[*] Predictions completed in 63.17 seconds.</span>
+
+              <span class="text-bold">precision    recall  f1-score   support</span>
+
+       <span class="class-name">Blast</span>     <span class="metric-num">0.9806</span>    <span class="metric-num">1.0000</span>    <span class="metric-num">0.9902</span>       <span class="text-info">304</span>
+      <span class="class-name">Blight</span>     <span class="metric-num">0.9804</span>    <span class="metric-num">1.0000</span>    <span class="metric-num">0.9901</span>       <span class="text-info">849</span>
+  <span class="class-name">Brown Spot</span>     <span class="metric-num">0.9167</span>    <span class="metric-num">0.9796</span>    <span class="metric-num">0.9471</span>       <span class="text-info">932</span>
+     <span class="class-name">Healthy</span>     <span class="metric-num">1.0000</span>    <span class="metric-num">0.8542</span>    <span class="metric-num">0.9214</span>       <span class="text-info">590</span>
+  <span class="class-name">Leaf Strip</span>     <span class="metric-num">1.0000</span>    <span class="metric-num">0.9474</span>    <span class="metric-num">0.9730</span>        <span class="text-info">19</span>
+
+    <span class="summary-metric">accuracy                         0.9607      2694</span>
+   <span class="summary-metric">macro avg     0.9755    0.9562    0.9644      2694</span>
+<span class="summary-metric">weighted avg     0.9628    0.9607    0.9601      2694</span>
+
+
+<span class="prompt">PS C:\wamp64\www\rice-health-app\backend&gt;</span> <span class="cursor"></span>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -37,7 +37,7 @@ def migrate_medicines():
                 "Ensure proper soil nutrition, specifically Nitrogen, Phosphorus, and Potassium.",
                 "Treat seeds with hot water (53-54°C) for 10-12 minutes before planting."
             ],
-            "Leaf Strip": [
+            "Leaf Streak": [
                 "Apply Copper-based bactericides or Streptomycin.",
                 "Remove and burn infected leaves to prevent further spread.",
                 "Practice crop rotation to break the disease cycle."

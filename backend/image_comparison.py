@@ -20,9 +20,10 @@ class ImageComparison:
         "brown spot":         "Brown Spot",
         "brownspot":          "Brown Spot",
         "rust":               "Rust",
-        "leaf strip":         "Leaf Strip",
-        "leaf streak":        "Leaf Strip",
-        "leafstrip":          "Leaf Strip",
+        "leaf strip":         "Leaf Streak",
+        "leaf streak":        "Leaf Streak",
+        "leaf stripe":        "Leaf Streak",
+        "leafstrip":          "Leaf Streak",
         "healthy":            "Healthy",
     }
 
@@ -108,7 +109,11 @@ class ImageComparison:
                 if isinstance(data, dict) and 'matrices' in data:
                     # Version 2.0 vectorized matrix format
                     self.matrices = data['matrices']
+                    if 'Leaf Strip' in self.matrices and 'Leaf Streak' not in self.matrices:
+                        self.matrices['Leaf Streak'] = self.matrices.pop('Leaf Strip')
                     self.counts = data.get('counts', {k: len(v) for k, v in self.matrices.items()})
+                    if 'Leaf Strip' in self.counts and 'Leaf Streak' not in self.counts:
+                        self.counts['Leaf Streak'] = self.counts.pop('Leaf Strip')
                     total = sum(self.counts.values())
                     print(f"[ImageComparison] Loaded {total} vectorized fingerprints across {len(self.matrices)} classes.")
                     self.reference_images = {k: list(range(v)) for k, v in self.counts.items()}

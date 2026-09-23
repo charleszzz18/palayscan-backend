@@ -36,17 +36,20 @@ def run_setup():
         print("[OK] Connected to MariaDB.")
 
         # --- 2. CREATE USERS TABLE ---
-        # Stores credentials, full names, addresses (barangays), and contact numbers.
+        # Stores credentials, usernames, full names, addresses (barangays), and contact numbers.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 full_name VARCHAR(100) NOT NULL,
-                email VARCHAR(100) UNIQUE NOT NULL,
+                username VARCHAR(50) UNIQUE,
+                email VARCHAR(100) NULL,
                 password VARCHAR(255) NOT NULL,
                 role ENUM('farmer', 'staff', 'admin') DEFAULT 'farmer',
+                staff_status VARCHAR(20) DEFAULT 'approved',
                 address VARCHAR(150) DEFAULT '',
                 sex VARCHAR(10) DEFAULT 'Male',
                 age INT DEFAULT 0,
+                dob DATE NULL,
                 barangay VARCHAR(100) DEFAULT '',
                 contact_number VARCHAR(20) DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -55,7 +58,6 @@ def run_setup():
         print("[OK] Table 'users' ready.")
 
         # --- 3. CREATE SESSIONS TABLE ---
-        # Holds active session hex tokens. Used to keep users logged in.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_sessions (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -69,8 +71,6 @@ def run_setup():
         print("[OK] Table 'user_sessions' ready.")
 
         # --- 4. CREATE SCAN RECORDS TABLE ---
-        # Logs every leaf scan event, including the analyzed health percentage, 
-        # detected diseases, environmental weather, crop stage, and advice.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS scan_records (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -88,21 +88,43 @@ def run_setup():
         """)
         print("[OK] Table 'scan_records' ready.")
 
-        # --- 5. REGISTER DEFAULT ADMIN ACCOUNT ---
-        # Inserts a default admin if it doesn't already exist.
+        # --- 5. CREATE AUDIT LOGS TABLE ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NULL,
+                username VARCHAR(50) DEFAULT 'system',
+                role VARCHAR(20) DEFAULT 'system',
+                action VARCHAR(100) NOT NULL,
+                details TEXT,
+                ip_address VARCHAR(45) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        print("[OK] Table 'audit_logs' ready.")
+
+        # --- RUN AUTO-MIGRATIONS FOR NEW COLUMNS (username, dob, etc.) ---
+        from disease_db import run_auto_migrations
+        run_auto_migrations(conn)
+        print("[OK] Column migrations applied.")
+
+        # --- 6. REGISTER DEFAULT ADMIN ACCOUNT ---
         cursor.execute("SELECT id FROM users WHERE email = 'admin@palayscan.com';")
-        if cursor.fetchone() is None:
-            admin_hash = generate_password_hash("Admin@123") # Hashes the password securely
+        admin_row = cursor.fetchone()
+        if admin_row is None:
+            admin_hash = generate_password_hash("Admin@123")
             cursor.execute("""
-                INSERT INTO users (full_name, email, password, role, address, sex, age, barangay)
-                VALUES ('System Administrator', 'admin@palayscan.com', %s, 'admin', 'DMMMSU Campus', 'Male', 35, 'Bacnotan');
+                INSERT INTO users (full_name, username, email, password, role, address, sex, age, barangay)
+                VALUES ('System Administrator', 'admin', 'admin@palayscan.com', %s, 'admin', 'DMMMSU Campus', 'Male', 35, 'Poblacion');
             """, (admin_hash,))
             conn.commit()
             print("[OK] Default admin created.")
-            print("     Email:    admin@palayscan.com")
+            print("     Username: admin")
             print("     Password: Admin@123")
         else:
-            print("[OK] Admin account already exists.")
+            cursor.execute("UPDATE users SET username = 'admin' WHERE id = %s", (admin_row[0],))
+            conn.commit()
+            print("[OK] Admin account updated with username 'admin'.")
 
         conn.close()
         print("\n[SUCCESS] Database setup complete! PALAYSCAN database is configured and ready.")

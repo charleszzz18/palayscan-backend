@@ -17,7 +17,7 @@ def test_uploaded_image():
     
     print("--- DIAGNOSTIC RESULTS ---")
     print(f"Primary Disease:    {res['primary_disease']} ({res['primary_disease_tl']})")
-    print(f"Severity:           {res['severity_label']}")
+    print(f"Infection Level:    {res.get('infection_level', 'N/A')}")
     print(f"Health Score:       {res['health_score']:.1%}")
     print(f"Infected Area:      {res['infected_area_pct']}%")
     print(f"Confirmed Diseases: {res['confirmed_diseases']}")
@@ -30,7 +30,7 @@ def test_uploaded_image():
 
 def test_dataset_samples():
     dataset_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dataset', 'Rice Disease')
-    classes = ['Brown Spot', 'Blast', 'Healthy']
+    classes = ['Brown Spot', 'Blast', 'Healthy', 'Leaf Streak']
     for cls in classes:
         cls_dir = os.path.join(dataset_dir, cls)
         if not os.path.exists(cls_dir):

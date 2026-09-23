@@ -16,6 +16,13 @@ import os
 import base64
 import uuid
 import functools
+from datetime import datetime, date
+import sys
+
+# Ensure backend directory is in sys.path so local imports resolve reliably
+_backend_dir = os.path.dirname(os.path.abspath(__file__))
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
 
 # --- Import custom local processing modules ---
 from color_analysis import analyze_color, extract_lesion_hotspots       # Detects leaf color thresholds, lesions, and growth stages
@@ -23,16 +30,22 @@ from texture_analysis import analyze_texture   # Evaluates leaf surface textures
 from disease_db import (
     get_advice, filter_diseases_by_weather,
     # User Account Auth Functions
-    check_email_exists, create_user, verify_password, create_session,
+    check_username_exists, check_email_exists, create_user, verify_password, create_session,
     get_user_by_token, delete_session,
     # Scan Logs
-    save_scan_record,
+    save_scan_record, get_scan_record_by_id,
     # Admin Stats & Queries
     get_all_scan_records, get_all_users, delete_user_by_id, get_dashboard_stats,
     admit_staff_user, reject_staff_user,
     # Disease DB CRUD Controls
     get_all_disease_advice, add_disease_advice, update_disease_advice, delete_disease_advice,
-    get_scan_records_for_report
+    get_scan_records_for_report, get_barangay_summary,
+    # Audit Trail
+    log_audit, get_audit_logs,
+    # Heat Map Data
+    get_barangay_heatmap_data,
+    # Backup & Restore
+    export_all_database_records, import_database_records
 )
 from image_comparison import ImageComparison   # Visual comparison (MobileNetV2 feature embeddings)
 
@@ -148,83 +161,120 @@ def serve_reference_image(disease):
 
 @app.route("/register", methods=["POST"])
 def register():
-    """Handles new user registrations. Stores encrypted accounts in MariaDB."""
+    """Handles new user registrations with username, DOB, and auto-calculated age. Stores in MariaDB."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid request."}), 400
 
     full_name      = (data.get('full_name') or '').strip()
+    username       = (data.get('username') or '').strip().lower()
     email          = (data.get('email') or '').strip().lower()
     password       = data.get('password') or ''
     role           = data.get('role') or 'farmer'
     address        = (data.get('address') or '').strip()
     sex            = (data.get('sex') or 'Male').strip()
-    try:
-        age        = int(data.get('age') or 0)
-    except (ValueError, TypeError):
-        age        = 0
+    dob            = (data.get('dob') or '').strip()
     barangay       = (data.get('barangay') or '').strip()
     contact_number = (data.get('contact_number') or '').strip()
 
     # Form field validation
-    if not full_name or not email or not password:
-        return jsonify({"error": "Full name, email, and password are required."}), 400
+    if not full_name or not username or not password:
+        return jsonify({"error": "Full name, username, and password are required."}), 400
+    if len(username) < 3:
+        return jsonify({"error": "Username must be at least 3 characters."}), 400
+    if not username.replace('_', '').replace('-', '').isalnum():
+        return jsonify({"error": "Username can only contain letters, numbers, hyphens, and underscores."}), 400
     if len(password) < 6:
         return jsonify({"error": "Password must be at least 6 characters."}), 400
     if role not in ('farmer', 'staff'):
         return jsonify({"error": "Invalid role selected."}), 400
-    if check_email_exists(email):
+
+    # Auto-calculate age from Date of Birth
+    age = 0
+    if dob:
+        try:
+            from datetime import date
+            parts = [int(p) for p in dob.split('-')]
+            birth_d = date(parts[0], parts[1], parts[2])
+            today_d = date.today()
+            age = today_d.year - birth_d.year - ((today_d.month, today_d.day) < (birth_d.month, birth_d.day))
+        except Exception:
+            age = 0
+    else:
+        try:
+            age = int(data.get('age') or 0)
+        except (ValueError, TypeError):
+            age = 0
+
+    if age < 1 or age > 120:
+        return jsonify({"error": "Please provide a valid Date of Birth resulting in an age between 1 and 120."}), 400
+
+    if check_username_exists(username):
+        return jsonify({"error": f"The username '{username}' is already taken. Please choose another."}), 409
+
+    if email and check_email_exists(email):
         return jsonify({"error": "This email is already registered."}), 409
 
     staff_status = 'pending' if role == 'staff' else 'approved'
 
     # Add account record to users table
-    user_id = create_user(full_name, email, password, role, staff_status, address, sex, age, barangay, contact_number)
+    user_id = create_user(full_name, username, password, role, staff_status, address, sex, age, barangay, contact_number, email=email, dob=dob)
     if not user_id:
         return jsonify({"error": "Registration failed. Please try again."}), 500
+
+    # Audit trail logging
+    log_audit("USER_REGISTER", f"Registered new user '{username}' ({role}) from {barangay or 'Bacnotan'}",
+              user_id=user_id, username=username, role=role, ip_address=request.remote_addr)
 
     if role == 'staff':
         msg = "Account created! Since you registered as MAO Staff, your account requires Admin approval before accessing the Admin Panel. You may log in as a Farmer in the meantime."
     else:
         msg = "Account created successfully!"
 
-    return jsonify({"message": msg, "user_id": user_id, "role": role, "staff_status": staff_status}), 201
+    return jsonify({"message": msg, "user_id": user_id, "username": username, "age": age, "dob": dob, "role": role, "staff_status": staff_status}), 201
 
 
 @app.route("/login", methods=["POST"])
 def login():
-    """Validates login credentials. Issues a session token if login is successful."""
+    """Validates login credentials via username. Issues a session token if login is successful."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid request."}), 400
 
-    email    = (data.get('email') or '').strip().lower()
-    password = data.get('password') or ''
+    identifier = (data.get('username') or data.get('email') or '').strip().lower()
+    password   = data.get('password') or ''
 
-    if not email or not password:
-        return jsonify({"error": "Email and password are required."}), 400
+    if not identifier or not password:
+        return jsonify({"error": "Username and password are required."}), 400
 
-    # Cross-reference with database users table
-    user = verify_password(email, password)
+    # Cross-reference with database users table (username or email fallback)
+    user = verify_password(identifier, password)
     if not user:
-        return jsonify({"error": "Incorrect email or password."}), 401
+        log_audit("LOGIN_FAILED", f"Failed login attempt for identifier '{identifier}'",
+                  username=identifier, ip_address=request.remote_addr)
+        return jsonify({"error": "Incorrect username or password."}), 401
 
     # Issue secure session token stored in user_sessions table
     token = create_session(user['id'])
     if not token:
         return jsonify({"error": "Could not create session. Please try again."}), 500
 
+    log_audit("USER_LOGIN", f"User '{user['username']}' logged in successfully",
+              user_id=user['id'], username=user['username'], role=user['role'], ip_address=request.remote_addr)
+
     return jsonify({
         "token": token,
         "user": {
             "id":           user['id'],
             "full_name":    user['full_name'],
+            "username":     user['username'],
             "email":        user['email'],
             "role":         user['role'],
             "staff_status": user.get('staff_status', 'approved'),
             "address":      user.get('address', ''),
             "sex":          user.get('sex', 'Male'),
             "age":          user.get('age', 0),
+            "dob":          user.get('dob', ''),
             "barangay":     user['barangay']
         }
     })
@@ -235,6 +285,10 @@ def logout():
     """Wipes session token from database when logging out."""
     token = get_token_from_request()
     if token:
+        user = get_user_by_token(token)
+        if user:
+            log_audit("USER_LOGOUT", f"User '{user['username']}' logged out",
+                      user_id=user['id'], username=user['username'], role=user['role'], ip_address=request.remote_addr)
         delete_session(token)
     return jsonify({"message": "Logged out successfully."})
 
@@ -280,7 +334,8 @@ def get_tagalog_translation(disease_name, stage, weather):
         "Blast":      "Mayroong Blast ang iyong palay. Ito ay isang mapanirang sakit na sumisira sa mga dahon.",
         "Brown Spot": "Mayroong Brown Spot ang iyong palay. Kadalasan ito ay dahil sa kulang na sustansya ng lupa.",
         "Rust":       "Ang iyong palay ay may sakit na Rust, na nagdudulot ng kalawangin na kulay sa mga dahon.",
-        "Leaf Strip": "May Leaf Strip ang palay. Ito ay mga maninipis na guhit sa dahon.",
+        "Leaf Streak": "May Leaf Streak ang palay. Ito ay mga maninipis na guhit sa dahon.",
+        "Leaf Strip":  "May Leaf Streak ang palay. Ito ay mga maninipis na guhit sa dahon.",
         "Healthy":    "Maganda ang kalagayan ng iyong palay. Walang nakitang sakit."
     }
     base = translations.get(disease_name, f"Ang iyong palay ay posibleng may {disease_name}.")
@@ -315,7 +370,7 @@ def get_tagalog_advice(disease_name):
 def detect_leaf_streaks(img):
     """
     Detects if an image contains interveinal narrow parallel streaks characteristic
-    of Bacterial Leaf Streak (Leaf Strip). Returns (streak_count, max_aspect_ratio).
+    of Bacterial Leaf Streak. Returns (streak_count, max_aspect_ratio).
     """
     h, w = img.shape[:2]
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -374,9 +429,19 @@ DISEASE_DIAGNOSTIC_EXPLANATIONS = {
         "symptom_tl": "Parang basang mga guhit mula sa dulo at gilid ng dahon na nagiging madilaw hanggang mapuputi.",
         "why_detected": "Marginal chlorotic and wavy lesions progressing inward along veins from the leaf margin, indicative of Xanthomonas oryzae."
     },
+    "Leaf Streak": {
+        "name": "Leaf Streak",
+        "name_tl": "Bacterial Leaf Streak (Leaf Streak)",
+        "lesion_color": "Narrow Yellowish-Brown Streaks",
+        "lesion_color_tl": "Maninipis na Dilaw-Kayumangging Guhit",
+        "color_hex": ["#b45309", "#d97706"],
+        "symptom": "Narrow, interveinal linear streaks between leaf veins that turn yellowish-brown.",
+        "symptom_tl": "Maninipis na linyang sugat sa pagitan ng mga ugat ng dahon na nagiging kulay kayumanggi.",
+        "why_detected": "Linear lesion streaks restricted between leaf veins with translucent or yellowish-brown appearance."
+    },
     "Leaf Strip": {
-        "name": "Bacterial Leaf Streak",
-        "name_tl": "Bacterial Leaf Streak (Leaf Strip)",
+        "name": "Leaf Streak",
+        "name_tl": "Bacterial Leaf Streak (Leaf Streak)",
         "lesion_color": "Narrow Yellowish-Brown Streaks",
         "lesion_color_tl": "Maninipis na Dilaw-Kayumangging Guhit",
         "color_hex": ["#b45309", "#d97706"],
@@ -440,8 +505,8 @@ def has_visual_evidence_for_disease(disease_name, tex_metrics):
         # Blast requires necrotic lesions with grayish centers and brown borders
         return (gray_ratio >= 0.003 and (brown_ratio >= 0.012 or straw_white_ratio >= 0.018))
         
-    elif disease_name == "Leaf Strip":
-        # Leaf Strip requires narrow linear interveinal streaks
+    elif disease_name in ("Leaf Streak", "Leaf Strip"):
+        # Leaf Streak requires narrow linear interveinal streaks
         return (num_streaks >= 6 and max_streak_ar >= 6.0)
         
     elif disease_name == "Rust":
@@ -599,8 +664,12 @@ def analyze_rice_health(img, weather_condition="hot"):
     # 7.3 Deep Learning Identification (MobileNetV2)
     from dl_analysis import analyze_with_dl
     dl_disease, dl_confidence, dl_all_preds = analyze_with_dl(img, return_all_preds=True)
+    if dl_disease == "Leaf Strip":
+        dl_disease = "Leaf Streak"
+    if "Leaf Strip" in dl_all_preds:
+        dl_all_preds["Leaf Streak"] = dl_all_preds.pop("Leaf Strip")
 
-    SUPPORTED_DISEASES = ["Blight", "Blast", "Brown Spot", "Rust", "Leaf Strip", "Healthy"]
+    SUPPORTED_DISEASES = ["Blight", "Blast", "Brown Spot", "Rust", "Leaf Streak", "Leaf Strip", "Healthy"]
     if dl_disease and dl_disease not in SUPPORTED_DISEASES:
         dl_disease = None
 
@@ -628,31 +697,31 @@ def analyze_rice_health(img, weather_condition="hot"):
     possible_diseases = []
     visual_matches_formatted = []
 
-    # Detect interveinal streak morphometry for Bacterial Leaf Streak (Leaf Strip)
+    # Detect interveinal streak morphometry for Bacterial Leaf Streak (Leaf Streak)
     num_streaks, max_streak_ar = detect_leaf_streaks(img)
 
-    # Check for Bacterial Leaf Streak (Leaf Strip)
-    # MobileNetV2 has < 100 clump photos for Leaf Strip and zero single-leaf macro training shots,
-    # causing it to misclassify close-up Leaf Strip as Blight, Blast, or Healthy.
-    is_leaf_strip = False
+    # Check for Bacterial Leaf Streak
+    # MobileNetV2 has < 100 clump photos for Leaf Streak and zero single-leaf macro training shots,
+    # causing it to misclassify close-up Leaf Streak as Blight, Blast, or Healthy.
+    is_leaf_streak = False
     # Only consider disease overrides if the leaf is NOT overwhelmingly confirmed healthy by DL, color, and lack of necrosis
     straw_white_ratio = straw_ratio + white_ratio
     is_confidently_healthy = (dl_disease == "Healthy" and dl_confidence >= 0.70 and health_score >= 0.85 and straw_white_ratio < 0.02 and brown_ratio < 0.02)
 
-    leaf_strip_sim = next((s for d, s in visual_matches if d == "Leaf Strip"), 0.0)
+    leaf_streak_sim = next((s for d, s in visual_matches if d in ("Leaf Streak", "Leaf Strip")), 0.0)
     if not is_confidently_healthy:
-        if top_visual_disease == "Leaf Strip" and top_visual_score >= 0.75:
+        if top_visual_disease in ("Leaf Streak", "Leaf Strip") and top_visual_score >= 0.75:
             if dl_disease == "Blast" and dl_confidence >= 0.90:
                 if num_streaks >= 10 or max_streak_ar >= 16.0:
-                    is_leaf_strip = True
+                    is_leaf_streak = True
             else:
-                is_leaf_strip = True
-        elif leaf_strip_sim >= 0.75 and dl_disease == "Blight":
-            is_leaf_strip = True
+                is_leaf_streak = True
+        elif leaf_streak_sim >= 0.75 and dl_disease == "Blight":
+            is_leaf_streak = True
         elif num_streaks >= 12 and max_streak_ar >= 10.0:
             # Interveinal linear streaks between veins (neither Blight nor Brown Spot forms > 10 narrow streaks)
             if not (dl_disease == top_visual_disease and dl_confidence >= 0.60):
-                is_leaf_strip = True
+                is_leaf_streak = True
 
     # Check for Bacterial Leaf Blight (Blight) cross-validation safeguard:
     # DL often misclassifies images with panicles/screens or whole clumps as Brown Spot,
@@ -660,7 +729,7 @@ def analyze_rice_health(img, weather_condition="hot"):
     is_blight = False
     blight_sim = next((s for d, s in visual_matches if d == "Blight"), 0.0)
 
-    if not is_leaf_strip and not is_confidently_healthy and not (dl_disease == "Blast" and dl_confidence >= 0.60):
+    if not is_leaf_streak and not is_confidently_healthy and not (dl_disease == "Blast" and dl_confidence >= 0.60):
         if top_visual_disease == "Blight" and top_visual_score >= 0.78:
             if straw_white_ratio >= 0.035 or (straw_white_ratio >= 0.025 and max_streak_ar >= 3.5) or ("Blight" in texture_diseases and straw_white_ratio >= 0.02):
                 is_blight = True
@@ -670,12 +739,12 @@ def analyze_rice_health(img, weather_condition="hot"):
         elif "Blight" in texture_diseases and blight_sim >= 0.75 and straw_white_ratio >= 0.03 and dl_disease != top_visual_disease:
             is_blight = True
 
-    if is_leaf_strip:
-        confirmed_diseases.append("Leaf Strip")
-        possible_diseases.append("Leaf Strip")
-        conf_score = max(leaf_strip_sim if leaf_strip_sim >= 0.70 else 0.88, 0.85)
-        visual_matches_formatted.append({"name": "Leaf Strip", "similarity": f"{conf_score:.2f}"})
-        if dl_disease and dl_disease != "Leaf Strip" and dl_disease != "Healthy":
+    if is_leaf_streak:
+        confirmed_diseases.append("Leaf Streak")
+        possible_diseases.append("Leaf Streak")
+        conf_score = max(leaf_streak_sim if leaf_streak_sim >= 0.70 else 0.88, 0.85)
+        visual_matches_formatted.append({"name": "Leaf Streak", "similarity": f"{conf_score:.2f}"})
+        if dl_disease and dl_disease not in ("Leaf Streak", "Leaf Strip", "Healthy"):
             visual_matches_formatted.append({"name": dl_disease, "similarity": f"{dl_confidence:.2f}"})
             if dl_confidence >= 0.40 and dl_disease not in possible_diseases:
                 possible_diseases.append(dl_disease)
@@ -795,14 +864,9 @@ def analyze_rice_health(img, weather_condition="hot"):
     primary_disease = confirmed_diseases[0] if confirmed_diseases else possible_diseases[0] if possible_diseases else "Healthy"
     infected_area_pct = round(max(0.0, (1.0 - health_score) * 100), 1)
 
-    if is_healthy or primary_disease == "Healthy":
-        severity_label = "Healthy"
-    elif infected_area_pct <= 12.0:
-        severity_label = "Mild / Early Stage"
-    elif infected_area_pct <= 28.0:
-        severity_label = "Moderate"
-    else:
-        severity_label = "Severe"
+    # Categorical Health and Infection Status
+    health_status = "Healthy" if is_healthy or primary_disease == "Healthy" else "Not Healthy"
+    infection_level = "None" if is_healthy else ("High" if infected_area_pct > 15.0 else "Low")
 
     diag_info = DISEASE_DIAGNOSTIC_EXPLANATIONS.get(primary_disease, DISEASE_DIAGNOSTIC_EXPLANATIONS.get("Healthy", {}))
 
@@ -835,6 +899,9 @@ def analyze_rice_health(img, weather_condition="hot"):
 
     return {
         "health_score":       float(health_score),
+        "health_status":      health_status,
+        "infection_level":    infection_level,
+        "infected_area_pct":  float(infected_area_pct) if not is_healthy else 0.0,
         "is_healthy":         is_healthy,
         "primary_disease":    primary_disease,
         "primary_disease_tl": diag_info.get("name_tl", primary_disease),
@@ -845,8 +912,6 @@ def analyze_rice_health(img, weather_condition="hot"):
         "lesion_color_tl":    diag_info.get("lesion_color_tl", ""),
         "color_hex":          diag_info.get("color_hex", ["#ef4444"]),
         "reference_image_url": f"/reference-image/{primary_disease}" if not is_healthy and primary_disease != "Healthy" else None,
-        "infected_area_pct":  infected_area_pct,
-        "severity_label":     severity_label,
         "lesion_hotspots":    enriched_hotspots,
         "diseases":           possible_diseases if possible_diseases else None,
         "confirmed_diseases": confirmed_diseases if confirmed_diseases else None,
@@ -890,8 +955,7 @@ def upload():
     if img is None:
         return jsonify({"error": "Could not process image"}), 400
 
-    # Downscale high-resolution images (smartphone cameras take 12MP+ photos,
-    # which causes 50+ second processing times and 6MB+ responses on CPU servers).
+    # Downscale high-resolution images
     max_dim = 1024
     h, w = img.shape[:2]
     if max(h, w) > max_dim:
@@ -917,6 +981,11 @@ def upload():
         growth_stage      = result.get('stage', 'Unknown'),
         advice            = result.get('advice', [])
     )
+
+    # Audit log scan event
+    log_audit("LEAF_SCAN", f"Scan #{scan_id}: {result.get('primary_disease')} ({result.get('health_status')}) in {current_user.get('barangay', 'Bacnotan')}",
+              user_id=current_user.get('id'), username=current_user.get('username'),
+              role=current_user.get('role'), ip_address=request.remote_addr)
 
     result['scan_id']   = scan_id
     result['user_name'] = current_user['full_name']
@@ -986,6 +1055,25 @@ def admin_records():
     """Lists the full history of rice scan events."""
     return jsonify(get_all_scan_records())
 
+@app.route("/admin/records/<int:scan_id>", methods=["GET"])
+@require_admin
+def admin_get_record(scan_id):
+    """Returns single scan record with full image and diagnosis advice details."""
+    record = get_scan_record_by_id(scan_id)
+    if not record:
+        return jsonify({"error": f"Scan #{scan_id} not found"}), 404
+    return jsonify(record)
+
+@app.route("/records/<int:scan_id>", methods=["GET"])
+@require_auth
+def get_record(scan_id):
+    """Returns single scan record with full image and diagnosis advice details for scanner page view."""
+    record = get_scan_record_by_id(scan_id)
+    if not record:
+        return jsonify({"error": f"Scan #{scan_id} not found"}), 404
+    return jsonify(record)
+
+
 @app.route("/admin/users", methods=["GET"])
 @require_admin
 def admin_users():
@@ -1000,6 +1088,9 @@ def admin_delete_user(user_id):
         return jsonify({"error": "Only the System Administrator can delete users."}), 403
     success = delete_user_by_id(user_id)
     if success:
+        log_audit("USER_DELETE", f"Deleted user account ID #{user_id}",
+                  user_id=request.current_user.get('id'), username=request.current_user.get('username'),
+                  role=request.current_user.get('role'), ip_address=request.remote_addr)
         return jsonify({"message": "User deleted successfully."})
     return jsonify({"error": "Cannot delete this user (admin or not found)."}), 400
 
@@ -1011,6 +1102,9 @@ def admin_admit_staff(user_id):
         return jsonify({"error": "Only the System Administrator can admit MAO Staff."}), 403
     success = admit_staff_user(user_id)
     if success:
+        log_audit("STAFF_ADMIT", f"Admitted user ID #{user_id} as approved MAO Staff",
+                  user_id=request.current_user.get('id'), username=request.current_user.get('username'),
+                  role=request.current_user.get('role'), ip_address=request.remote_addr)
         return jsonify({"message": "User admitted as MAO Staff successfully!"})
     return jsonify({"error": "Failed to admit user."}), 400
 
@@ -1022,6 +1116,9 @@ def admin_reject_staff(user_id):
         return jsonify({"error": "Only the System Administrator can reject MAO Staff."}), 403
     success = reject_staff_user(user_id)
     if success:
+        log_audit("STAFF_REJECT", f"Rejected MAO Staff request for user ID #{user_id}",
+                  user_id=request.current_user.get('id'), username=request.current_user.get('username'),
+                  role=request.current_user.get('role'), ip_address=request.remote_addr)
         return jsonify({"message": "MAO Staff request rejected. User is now listed as a Farmer."})
     return jsonify({"error": "Failed to reject user."}), 400
 
@@ -1045,6 +1142,9 @@ def admin_add_disease():
         return jsonify({"error": "Disease name and advice are required."}), 400
     new_id = add_disease_advice(disease_name, advice_text)
     if new_id:
+        log_audit("ADVICE_ADD", f"Added treatment advice #{new_id} for '{disease_name}'",
+                  user_id=request.current_user.get('id'), username=request.current_user.get('username'),
+                  role=request.current_user.get('role'), ip_address=request.remote_addr)
         return jsonify({"message": "Advice added.", "id": new_id}), 201
     return jsonify({"error": "Failed to add advice."}), 500
 
@@ -1058,6 +1158,9 @@ def admin_update_disease(advice_id):
         return jsonify({"error": "Advice text is required."}), 400
     success = update_disease_advice(advice_id, advice_text)
     if success:
+        log_audit("ADVICE_UPDATE", f"Updated treatment advice #{advice_id}",
+                  user_id=request.current_user.get('id'), username=request.current_user.get('username'),
+                  role=request.current_user.get('role'), ip_address=request.remote_addr)
         return jsonify({"message": "Advice updated."})
     return jsonify({"error": "Update failed or record not found."}), 400
 
@@ -1067,11 +1170,37 @@ def admin_delete_disease(advice_id):
     """Deletes an advice entry by ID."""
     success = delete_disease_advice(advice_id)
     if success:
+        log_audit("ADVICE_DELETE", f"Deleted treatment advice #{advice_id}",
+                  user_id=request.current_user.get('id'), username=request.current_user.get('username'),
+                  role=request.current_user.get('role'), ip_address=request.remote_addr)
         return jsonify({"message": "Advice deleted."})
     return jsonify({"error": "Delete failed or record not found."}), 400
 
 
-# --- 12. EXPORT CSV REPORTS ---
+# --- 12. BARANGAY DISEASE HEAT MAP ROUTE ---
+
+@app.route("/admin/heatmap-data", methods=["GET"])
+@require_admin
+def admin_heatmap_data():
+    """Returns barangay spatial disease distribution data for Bacnotan."""
+    return jsonify(get_barangay_heatmap_data())
+
+
+# --- 13. AUDIT TRAIL ROUTE ---
+
+@app.route("/admin/audit-logs", methods=["GET"])
+@require_admin
+def admin_audit_logs():
+    """Fetches paginated audit logs with search and action filters."""
+    limit = int(request.args.get('limit', 50))
+    offset = int(request.args.get('offset', 0))
+    action = request.args.get('action', None)
+    search = request.args.get('search', None)
+    logs = get_audit_logs(limit=limit, offset=offset, action_filter=action, search=search)
+    return jsonify(logs)
+
+
+# --- 14. EXPORT REPORTS (ALL OR BARANGAY-SPECIFIC) ---
 
 import csv
 import io
@@ -1080,21 +1209,174 @@ from flask import Response
 @app.route("/admin/report/csv", methods=["GET"])
 @require_admin
 def admin_generate_csv():
-    """Generates and downloads a CSV report containing all scan logs."""
-    records = get_scan_records_for_report()
+    """Generates and downloads a CSV report containing scan logs, optionally filtered by barangay."""
+    barangay = request.args.get('barangay')
+    records = get_scan_records_for_report(barangay=barangay)
     output  = io.StringIO()
-    writer  = csv.DictWriter(output, fieldnames=[
-        'id','user_name','email','barangay','detected_diseases',
-        'health_score','is_healthy','weather_condition','growth_stage','advice','created_at'
+    writer  = csv.writer(output)
+    writer.writerow([
+        'Scan ID', 'Farmer Name', 'Username', 'Barangay', 'Detected Disease',
+        'Health Status', 'Status', 'Weather', 'Growth Stage', 'Treatment Advice', 'Date & Time'
     ])
-    writer.writeheader()
-    writer.writerows(records)
+    for r in records:
+        writer.writerow([
+            r.get('id'),
+            r.get('user_name'),
+            r.get('username'),
+            r.get('barangay'),
+            r.get('detected_diseases'),
+            r.get('health_score'),
+            r.get('is_healthy'),
+            r.get('weather_condition'),
+            r.get('growth_stage'),
+            r.get('advice'),
+            r.get('created_at')
+        ])
     csv_data = output.getvalue()
+    
+    b_suffix = f"_{barangay.strip().replace(' ', '_')}" if barangay and barangay.strip().lower() != 'all' else ""
+    filename = f"PALAYSCAN_Report{b_suffix}_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    log_audit("REPORT_EXPORT", f"Exported scan CSV report (Location: {barangay or 'All'})",
+              user_id=request.current_user.get('id'), username=request.current_user.get('username'),
+              role=request.current_user.get('role'), ip_address=request.remote_addr)
+
     return Response(
         csv_data,
         mimetype='text/csv',
-        headers={'Content-Disposition': 'attachment; filename=PALAYSCAN_Report.csv'}
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
+
+@app.route("/admin/report/barangay-summary", methods=["GET"])
+@require_admin
+def admin_barangay_summary():
+    """Returns focused summary report data for a specific barangay."""
+    barangay = request.args.get('barangay')
+    if not barangay:
+        return jsonify({"error": "Barangay parameter is required"}), 400
+    summary = get_barangay_summary(barangay)
+    if not summary:
+        return jsonify({"error": f"No data found for barangay '{barangay}'"}), 404
+    return jsonify(summary)
+
+
+# --- 15. DATABASE BACKUP & RESTORE ROUTES ---
+
+import zipfile
+import json
+
+@app.route("/admin/backup", methods=["GET"])
+@require_admin
+def admin_backup():
+    """
+    Creates and downloads a complete self-contained ZIP backup containing:
+    1. database_dump.json (all table records)
+    2. uploads/ (all leaf scan image files)
+    3. metadata.json (timestamp, version, counts)
+    """
+    try:
+        db_dump = export_all_database_records()
+        
+        memory_zip = io.BytesIO()
+        with zipfile.ZipFile(memory_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # 1. Database records dump
+            zf.writestr('database_dump.json', json.dumps(db_dump, indent=2, ensure_ascii=False))
+            
+            # 2. Metadata file
+            meta = {
+                "system": "PALAYSCAN",
+                "timestamp": datetime.now().isoformat(),
+                "created_by": request.current_user.get('username', 'admin'),
+                "user_count": len(db_dump.get("users", [])),
+                "scan_count": len(db_dump.get("scan_records", [])),
+                "advice_count": len(db_dump.get("disease_advice", []))
+            }
+            zf.writestr('metadata.json', json.dumps(meta, indent=2))
+            
+            # 3. Include all uploaded scan images from backend/uploads
+            if os.path.exists(uploads_dir):
+                for root, dirs, files in os.walk(uploads_dir):
+                    for file in files:
+                        full_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(full_path, uploads_dir)
+                        zf.write(full_path, arcname=os.path.join('uploads', rel_path))
+
+        memory_zip.seek(0)
+        log_audit("BACKUP_DOWNLOAD", "Generated and downloaded full system backup (Database + Images)",
+                  user_id=request.current_user.get('id'), username=request.current_user.get('username'),
+                  role=request.current_user.get('role'), ip_address=request.remote_addr)
+
+        backup_name = f"PALAYSCAN_Backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        return Response(
+            memory_zip.getvalue(),
+            mimetype='application/zip',
+            headers={'Content-Disposition': f'attachment; filename={backup_name}'}
+        )
+    except Exception as e:
+        print(f"[Admin Backup Error] {e}", file=sys.stderr)
+        return jsonify({"error": f"Failed to generate backup: {e}"}), 500
+
+
+@app.route("/admin/restore", methods=["POST"])
+@require_admin
+def admin_restore():
+    """
+    Restores the system from an uploaded backup ZIP archive:
+    1. Validates archive structure
+    2. Restores database records into MariaDB
+    3. Reconstructs all associated images in backend/uploads/
+    """
+    if "backup_file" not in request.files:
+        return jsonify({"error": "No backup file uploaded"}), 400
+
+    file = request.files["backup_file"]
+    if not file.filename.lower().endswith(".zip"):
+        return jsonify({"error": "The uploaded file must be a valid .zip archive."}), 400
+
+    try:
+        zip_bytes = io.BytesIO(file.read())
+        with zipfile.ZipFile(zip_bytes, "r") as zf:
+            namelist = zf.namelist()
+            if "database_dump.json" not in namelist:
+                return jsonify({"error": "Corrupted or invalid backup archive (missing database_dump.json)."}), 400
+
+            # 1. Restore Database Records
+            dump_data = json.loads(zf.read("database_dump.json").decode("utf-8"))
+            restore_summary = import_database_records(dump_data)
+
+            # 2. Restore Uploaded Images
+            os.makedirs(uploads_dir, exist_ok=True)
+            restored_images_count = 0
+            for name in namelist:
+                if name.startswith("uploads/") and not name.endswith("/"):
+                    base_filename = os.path.basename(name)
+                    if base_filename:
+                        target_file_path = os.path.join(uploads_dir, base_filename)
+                        with open(target_file_path, "wb") as out_f:
+                            out_f.write(zf.read(name))
+                        restored_images_count += 1
+
+        log_audit(
+            "DATABASE_RESTORE",
+            f"Restored system from backup archive: {restore_summary.get('users_restored', 0)} users, "
+            f"{restore_summary.get('scans_restored', 0)} scans, {restored_images_count} images",
+            user_id=request.current_user.get('id'),
+            username=request.current_user.get('username'),
+            role=request.current_user.get('role'),
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            "message": "System successfully restored from backup!",
+            "users_restored": restore_summary.get("users_restored", 0),
+            "scans_restored": restore_summary.get("scans_restored", 0),
+            "advice_restored": restore_summary.get("advice_restored", 0),
+            "images_restored": restored_images_count
+        })
+
+    except Exception as e:
+        print(f"[Admin Restore Error] {e}", file=sys.stderr)
+        return jsonify({"error": f"Database restoration failed: {e}"}), 500
 
 
 # --- 13. RUN APPLICATION SERVER ---

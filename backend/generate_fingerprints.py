@@ -26,9 +26,10 @@ NAME_MAP = {
     "blast":              "Blast",
     "brown spot":         "Brown Spot",
     "brownspot":          "Brown Spot",
-    "leaf strip":         "Leaf Strip",
-    "leaf streak":        "Leaf Strip",
-    "leafstrip":          "Leaf Strip",
+    "leaf strip":         "Leaf Streak",
+    "leaf streak":        "Leaf Streak",
+    "leaf stripe":        "Leaf Streak",
+    "leafstrip":          "Leaf Streak",
     "healthy":            "Healthy",
 }
 

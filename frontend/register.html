@@ -64,11 +64,12 @@
                         </div>
                     </div>
                     <div class="auth-field">
-                        <label for="age">Age <span class="req">*</span></label>
+                        <label for="dob">Date of Birth <span class="req">*</span></label>
                         <div class="auth-input-wrap">
-                            <span class="auth-input-icon">🎂</span>
-                            <input type="number" id="age" placeholder="Enter age" min="1" max="120" required>
+                            <span class="auth-input-icon">📅</span>
+                            <input type="date" id="dob" required>
                         </div>
+                        <div id="calculatedAgeBadge" style="display:none; margin-top: 6px; font-size: 0.8rem; font-weight: 600; color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; padding: 4px 10px; border-radius: 6px;"></div>
                     </div>
                 </div>
                 
@@ -177,10 +178,10 @@
                         </div>
                     </div>
                     <div class="auth-field">
-                        <label for="email">Email Address <span class="req">*</span></label>
+                        <label for="username">Username <span class="req">*</span></label>
                         <div class="auth-input-wrap">
-                            <span class="auth-input-icon">📧</span>
-                            <input type="email" id="email" placeholder="Enter email address" required autocomplete="email">
+                            <span class="auth-input-icon">👤</span>
+                            <input type="text" id="username" placeholder="Choose a username" required autocomplete="username" pattern="^[a-zA-Z0-9_\-]+$" minlength="3" maxlength="30">
                         </div>
                     </div>
                 </div>

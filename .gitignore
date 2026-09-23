@@ -7,3 +7,5 @@ __pycache__/
 *.pyc
 *.bak
 *.exe
+*.npy
+.vscode/

@@ -22,8 +22,7 @@ const diseaseInfo = {
         symptoms: [
             "Mga sugat na hugis brilyante sa mga dahon",
             "Grey centers na may brown na gilid sa mga sugat"
-        ],
-        severity: "Mataas - Maaaring magdulot ng hanggang 30% na pagkawala ng ani"
+        ]
     },
     "Brown Spot": {
         description: "Ang Brown Spot ay sanhi ng fungus. Lumilitaw ito bilang maliit, bilog hanggang sa hugis-itlog, kayumanggi na mga sugat sa mga dahon.",
@@ -32,8 +31,7 @@ const diseaseInfo = {
         symptoms: [
             "Maliit na bilog hanggang sa hugis-itlog na kayumanggi na mga sugat sa mga dahon",
             "Mga sugat na may kulay-abo hanggang mapuputing mga sentro habang sila ay tumatanda"
-        ],
-        severity: "Katamtaman hanggang Mataas - Pinakamapinsala sa mga kondisyon na kulang sa sustansya"
+        ]
     },
     "Blight": {
         description: "Ang Blight ay sanhi ng bacteria. Ang mga sintomas ay nagsisimula bilang mga sugat na nabasa sa mga gilid ng dahon.",
@@ -43,18 +41,25 @@ const diseaseInfo = {
             "Mga sugat na nababad sa tubig sa gilid ng dahon",
             "Mga sugat na nagiging dilaw hanggang puti",
             "Pagkulot ng mga dulo ng dahon"
-        ],
-        severity: "Mataas - Maaaring bawasan ang ani ng 20-50% sa mga malalang impeksiyo"
+        ]
     },
-    "Leaf Strip": {
-        description: "Ang Leaf Strip ay sanhi ng bacteria na lumilikha ng mga maninipis na guhit-guhit na sugat sa dahon.",
+    "Leaf Streak": {
+        description: "Ang Leaf Streak (Bacterial Leaf Streak) ay sanhi ng bacteria na lumilikha ng mga maninipis na guhit-guhit na sugat sa dahon.",
         image: "images/healthy.png",
-        imageAlt: "Leaf Strip Disease",
+        imageAlt: "Leaf Streak Disease",
         symptoms: [
             "Maninipis at transparent na guhit sa dahon",
             "Mga guhit na nagiging brown paglipas ng panahon"
-        ],
-        severity: "Katamtaman - Nababawasan ang photosynthetic area ng halaman"
+        ]
+    },
+    "Leaf Strip": {
+        description: "Ang Leaf Streak (Bacterial Leaf Streak) ay sanhi ng bacteria na lumilikha ng mga maninipis na guhit-guhit na sugat sa dahon.",
+        image: "images/healthy.png",
+        imageAlt: "Leaf Streak Disease",
+        symptoms: [
+            "Maninipis at transparent na guhit sa dahon",
+            "Mga guhit na nagiging brown paglipas ng panahon"
+        ]
     }
 };
 
@@ -74,27 +79,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const confirmSec = document.getElementById('confirmSection');
         if (confirmSec) confirmSec.style.display = 'block';
         const disease = diseaseInfo[diseaseName]; // Extract disease data block
-        
-        // Severity CSS mapping helper
-        const getSeverityClass = (severity) => {
-            if (severity.toLowerCase().includes('mataas')) return 'severity-high'; // Red style
-            if (severity.toLowerCase().includes('katamtaman')) return 'severity-medium'; // Orange style
-            return 'severity-low'; // Green style
-        };
 
         // Gather scan images stored in browser memory (sessionStorage)
         const analysisData = JSON.parse(sessionStorage.getItem('analysisData'));
         const infectedImage = analysisData ? analysisData.highlighted_image : sessionStorage.getItem('previewImageSrc');
         const rawImage = sessionStorage.getItem('previewImageSrc');
 
-        // Dynamically inject the UI details block
+        // Dynamically inject the UI details block (severity level removed)
         document.getElementById('diseaseContent').innerHTML = `
             <div class="disease-detail-grid">
                 <div class="info-card">
                     <h4>📝 Overview</h4>
                     <p style="font-size: 1.1rem; line-height: 1.6; color: #000;">${disease.description}</p>
-                    <div class="severity-badge ${getSeverityClass(disease.severity)}">Severity: ${disease.severity.split(' - ')[0]}</div>
-                    <p style="margin-top: 20px; font-size: 0.95rem; opacity: 0.6; font-style: italic;">${disease.severity.split(' - ')[1] || ''}</p>
                 </div>
                 <div class="info-card">
                     <h4>🔍 Common Symptoms</h4>

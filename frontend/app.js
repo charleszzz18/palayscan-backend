@@ -96,19 +96,146 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById("results").style.display = "none";
     });
 
-    // --- 2.6 State Restoration (For Back Button / Refresh Persistence) ---
-    // Loads and recovers previous scan states from browser memory so they aren't lost when navigating back from details pages.
-    const savedData = sessionStorage.getItem('analysisData');
-    const savedImage = sessionStorage.getItem('previewImageSrc');
-    if (savedData && savedImage) {
-        previewImage.src = savedImage;
-        uploadArea.style.display = "none";
-        uploadPreview.style.display = "block";
-        const resultsDiv = document.getElementById("results");
-        resultsDiv.style.display = "block";
-        setTimeout(() => { renderResults(JSON.parse(savedData)); }, 100);
+    // --- 2.6 Direct URL Scan Inspector or State Restoration ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetScanId = urlParams.get('scan_id');
+    if (targetScanId) {
+        loadScanRecordById(targetScanId);
+    } else {
+        // Loads and recovers previous scan states from browser memory so they aren't lost when navigating back from details pages.
+        const savedData = sessionStorage.getItem('analysisData');
+        const savedImage = sessionStorage.getItem('previewImageSrc');
+        if (savedData && savedImage) {
+            previewImage.src = savedImage;
+            uploadArea.style.display = "none";
+            uploadPreview.style.display = "block";
+            const resultsDiv = document.getElementById("results");
+            resultsDiv.style.display = "block";
+            setTimeout(() => { renderResults(JSON.parse(savedData)); }, 100);
+        }
     }
 });
+
+// --- 2.7 LOAD HISTORICAL SCAN RECORD BY ID (e.g. index.html?scan_id=162) ---
+async function loadScanRecordById(scanId) {
+    const uploadArea = document.getElementById("uploadArea");
+    const uploadPreview = document.getElementById("uploadPreview");
+    const previewImage = document.getElementById("previewImage");
+    const resultsDiv = document.getElementById("results");
+
+    if (uploadArea) uploadArea.style.display = "none";
+    if (uploadPreview) uploadPreview.style.display = "block";
+    if (resultsDiv) {
+        resultsDiv.style.display = "block";
+        resultsDiv.innerHTML = `<div class="loading-status" style="text-align:center;padding:40px;"><div class="loading-spinner"></div><p style="margin-top:12px;font-weight:600;color:#166534;">Loading scanned leaf image and analysis for Scan #${scanId}...</p></div>`;
+    }
+
+    try {
+        let res = await fetch(`${API_BASE_URL}/records/${scanId}`, { headers: getAuthHeaders() });
+        if (!res.ok) {
+            res = await fetch(`${API_BASE_URL}/admin/records/${scanId}`, { headers: getAuthHeaders() });
+        }
+        if (!res.ok) {
+            throw new Error(`Scan #${scanId} could not be retrieved (${res.status})`);
+        }
+        const rec = await res.json();
+
+        // Display scanned image
+        const imgUrl = rec.image_filename ? `${API_BASE_URL}/uploads/${rec.image_filename}` : (rec.image_url || '');
+        if (previewImage) {
+            if (imgUrl) {
+                previewImage.src = imgUrl;
+                previewImage.alt = `Scanned Rice Leaf #${scanId}`;
+            } else {
+                previewImage.style.display = "none";
+            }
+        }
+
+        // Add back-to-audit navigation banner at top
+        let bannerEl = document.getElementById("scanRecordBanner");
+        if (!bannerEl && uploadPreview && uploadPreview.parentElement) {
+            bannerEl = document.createElement("div");
+            bannerEl.id = "scanRecordBanner";
+            uploadPreview.parentElement.insertBefore(bannerEl, uploadPreview);
+        }
+        if (bannerEl) {
+            bannerEl.innerHTML = `
+                <div style="background:#f0fdf4; border:1.5px solid #86efac; border-radius:14px; padding:14px 20px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; box-shadow:0 4px 12px rgba(34,197,94,0.1);">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="background:#166534; color:#fff; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:6px;">AUDIT LOG SCAN</span>
+                            <strong style="font-size:1.05rem; color:#166534;">Rice Leaf Scan #${rec.id}</strong>
+                        </div>
+                        <div style="font-size:0.85rem; color:#475569; margin-top:4px;">
+                            Scanned by <strong>${rec.user_name || rec.username}</strong> in <strong>${rec.barangay || 'Bacnotan, La Union'}</strong> &bull; ${rec.created_at ? rec.created_at.substring(0, 19).replace('T', ' ') : ''}
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <a href="admin.html#audit" style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; background:#1e293b; color:#fff; border-radius:8px; text-decoration:none; font-size:0.85rem; font-weight:600; box-shadow:0 2px 6px rgba(0,0,0,0.2);">
+                            📜 Back to Audit Trail
+                        </a>
+                        <button type="button" onclick="window.location.href='index.html'" style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer;">
+                            📷 New Scan
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Custom action buttons under preview
+        const previewActions = document.querySelector(".preview-actions");
+        if (previewActions) {
+            previewActions.innerHTML = `
+                <a href="admin.html#audit" class="secondary-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; background:#1e293b; color:#fff;">
+                    📜 Back to Audit Trail
+                </a>
+                <button type="button" onclick="window.location.href='index.html'" class="secondary-btn" style="display:inline-flex; align-items:center; gap:6px;">
+                    📷 Choose Different Image
+                </button>
+            `;
+        }
+
+        const isHealthy = Boolean(rec.is_healthy);
+        const diseaseName = rec.detected_diseases || (isHealthy ? "Healthy" : "Unknown Issue");
+
+        const analysisData = {
+            scan_id: rec.id,
+            is_healthy: isHealthy,
+            primary_disease: diseaseName,
+            primary_disease_tl: diseaseName,
+            health_score: isHealthy ? 0.95 : 0.40,
+            infected_area_pct: rec.infected_area_pct !== undefined ? rec.infected_area_pct : (isHealthy ? 0.0 : 4.4),
+            why_detected: isHealthy
+                ? "The leaf displays uniform vibrant green pigmentation without significant necrotic lesions or fungal signs."
+                : `Diagnostic scan flagged localized leaf discoloration and lesion spread characteristic of ${diseaseName}.`,
+            disease_symptom: isHealthy
+                ? "Vibrant green blade with normal vascular tissue architecture."
+                : `Symptom patterns and necrotic patches observed on rice blade matching ${diseaseName}.`,
+            weather: rec.weather_condition || 'Normal',
+            growth_stage: rec.growth_stage || 'Tillering',
+            treatments: rec.advice || [],
+            farmer_info: {
+                name: rec.user_name || rec.username,
+                barangay: rec.barangay || 'Bacnotan'
+            },
+            highlighted_image: imgUrl
+        };
+
+        renderResults(analysisData);
+    } catch (err) {
+        if (resultsDiv) {
+            resultsDiv.innerHTML = `
+                <div class="error-message" style="text-align:center; padding:30px;">
+                    <p style="font-size:1.1rem; font-weight:700; color:#dc2626;">❌ Unable to load scan #${scanId}</p>
+                    <p style="color:#64748b;">${err.message || 'Record not found or network error'}</p>
+                    <a href="admin.html#audit" style="display:inline-block; margin-top:12px; padding:8px 18px; background:#1e293b; color:#fff; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.85rem;">← Return to Audit Trail</a>
+                </div>
+            `;
+        }
+        console.error("Failed to load scan record:", err);
+    }
+}
+
 
 // --- 3. LIVE COORDINATES & ENVIRONMENTAL TEMPERATURE RETRIEVAL ---
 // Pulls live GPS details and requests temperature metrics from Open-Meteo API.
@@ -288,15 +415,17 @@ async function analyzeImage(e) {
 // Compiles JSON findings returned by the server into a dynamic, beautiful Glassmorphism report dashboard.
 function renderResults(data) {
     console.log("Analysis Data Received:", data);
-    const healthScore = (data.health_score * 100).toFixed(1); // Translate 0-1 range to 0-100% scale
-    const infectedArea = data.infected_area_pct !== undefined ? parseFloat(data.infected_area_pct).toFixed(1) : Math.max(0, (100 - parseFloat(healthScore))).toFixed(1);
+    const healthScore = data.health_score !== undefined ? (data.health_score * 100).toFixed(1) : "95.0";
     
     const primaryDisease = data.primary_disease || (data.confirmed_diseases && data.confirmed_diseases[0]) || (data.visual_matches && data.visual_matches[0] && data.visual_matches[0].name) || (data.diseases && data.diseases[0]) || "Healthy";
     const primaryDiseaseTL = data.primary_disease_tl || primaryDisease;
-    const severityLabel = data.severity_label || (data.is_healthy ? "Healthy" : "Mild / Early Stage");
     const whyDetected = data.why_detected || "The AI system detected distinctive discoloration and lesion patterns on the leaf blade.";
     const diseaseSymptom = data.disease_symptom || "Necrotic lesion spots observed on the leaf surface.";
     const isHealthy = data.is_healthy || primaryDisease === "Healthy";
+    const infectedArea = data.infected_area_pct !== undefined 
+        ? parseFloat(data.infected_area_pct).toFixed(1) 
+        : (isHealthy ? "0.0" : Math.max(0, (100 - parseFloat(healthScore))).toFixed(1));
+    const infectionSpreadPct = isHealthy ? "0%" : `${infectedArea}%`;
     const hotspots = (data.lesion_hotspots && data.lesion_hotspots.length > 0)
         ? data.lesion_hotspots
         : (!isHealthy ? [
@@ -310,7 +439,7 @@ function renderResults(data) {
         primaryDisease === "Blight" ? "Straw-Yellow to Bleached Wavy White" :
         primaryDisease === "Brown Spot" ? "Reddish-Brown with Yellow Halo" :
         primaryDisease === "Blast" ? "Grayish-White with Dark Brown Margin" :
-        primaryDisease === "Leaf Strip" ? "Narrow Yellowish-Brown Streaks" :
+        (primaryDisease === "Leaf Streak" || primaryDisease === "Leaf Strip") ? "Narrow Yellowish-Brown Streaks" :
         primaryDisease === "Rust" ? "Powdery Orange-Red Pustules" : "Vibrant Clean Green"
     );
 
@@ -318,7 +447,7 @@ function renderResults(data) {
         primaryDisease === "Blight" ? ["#eab308", "#fef08a"] :
         primaryDisease === "Brown Spot" ? ["#78350f", "#ca8a04"] :
         primaryDisease === "Blast" ? ["#94a3b8", "#78350f"] :
-        primaryDisease === "Leaf Strip" ? ["#b45309", "#d97706"] :
+        (primaryDisease === "Leaf Streak" || primaryDisease === "Leaf Strip") ? ["#b45309", "#d97706"] :
         primaryDisease === "Rust" ? ["#ea580c", "#c2410c"] : ["#22c55e", "#16a34a"]
     );
 
@@ -327,46 +456,45 @@ function renderResults(data) {
         ? `${apiBase}/reference-image/${encodeURIComponent(primaryDisease)}`
         : null;
 
-    // 4.1 Compile Rice Health percentage radial card
+    // 4.1 Infection Spread Percentage Card
     let resultHTML = `<h3>Analysis Report</h3>
         <div class="score-container">
-            <div class="score-circle ${healthScore > 50 ? 'healthy' : 'unhealthy'}" style="--score-percent: ${healthScore}; --score-color: ${healthScore > 50 ? 'var(--primary)' : 'var(--danger)'}">
-                <span class="score-value">${healthScore}%</span>
-                <span class="score-label">Rice Health Score</span>
+            <div class="score-circle ${isHealthy ? 'healthy' : 'unhealthy'}" style="--score-percent: ${isHealthy ? 0 : Math.min(100, Math.max(5, parseFloat(infectedArea)))}; --score-color: ${isHealthy ? 'var(--primary)' : 'var(--danger)'}">
+                <span class="score-value" style="font-size: 2.8rem; font-weight: 900; line-height: 1.1;">${infectionSpreadPct}</span>
+                <span class="score-label" style="font-weight: 700; margin-top: 6px; font-size: 0.85rem; letter-spacing: 1px;">Infection Spread</span>
             </div>
         </div>`;
 
-    // 4.2 Primary Diagnosis Card (Clean, Non-dizzying presentation)
+    // 4.2 Primary Diagnosis Card (Aligned for desktop & responsive)
     resultHTML += `
         <div class="primary-diagnosis-card ${isHealthy ? 'healthy' : 'unhealthy'}">
             <div class="diag-card-header">
-                <div class="diag-icon-badge">${isHealthy ? '🌿' : '⚠️'}</div>
-                <div>
-                    <span class="diag-tag">${isHealthy ? 'Clean Leaf' : 'Primary Pathogen Diagnosis'}</span>
-                    <h3 class="diag-title">${primaryDisease}</h3>
-                    <span class="diag-title-tl">${primaryDiseaseTL}</span>
+                <div class="diag-header-info">
+                    <div class="diag-icon-badge">${isHealthy ? '🌿' : '⚠️'}</div>
+                    <div class="diag-title-wrap">
+                        <span class="diag-tag">${isHealthy ? 'Clean Leaf' : 'Primary Pathogen Diagnosis'}</span>
+                        <h3 class="diag-title">${primaryDisease}</h3>
+                        <span class="diag-title-tl">${primaryDiseaseTL}</span>
+                    </div>
                 </div>
-                <span class="severity-pill ${isHealthy ? 'healthy' : 'warning'}">${severityLabel}</span>
+                <div class="diag-header-action">
+                    ${isHealthy ? '' : (
+                        primaryDisease.toLowerCase().includes('rust')
+                            ? `<button class="info-btn disabled" disabled style="background:#64748b; color:#fff; cursor:not-allowed; opacity:0.85;">Update Coming Soon</button>`
+                            : `<button class="info-btn" onclick="window.location.href='disease-info.html?disease=${encodeURIComponent(primaryDisease)}'">Detailed Treatment Guide &rarr;</button>`
+                    )}
+                </div>
             </div>
 
             <div class="diag-explanation">
                 <p class="diag-rationale"><strong>Symptom Profile:</strong> ${whyDetected}</p>
                 <div class="diag-key-signs">
-                    <span class="key-signs-label">Botanical Indicators:</span>
+                    <span class="key-signs-label"><strong>Botanical Indicators:</strong> </span>
                     <span class="key-signs-text">${diseaseSymptom}</span>
                 </div>
             </div>
 
-            <div class="diag-card-footer">
-                ${isHealthy ? '' : (
-                    primaryDisease.toLowerCase().includes('rust')
-                        ? `<button class="info-btn disabled" disabled style="background:#64748b; color:#fff; cursor:not-allowed; opacity:0.85;">Update Coming Soon</button>`
-                        : `<button class="info-btn" onclick="window.location.href='disease-info.html?disease=${encodeURIComponent(primaryDisease)}'">Detailed Treatment Guide &rarr;</button>`
-                )}
-            </div>
-
             ${(() => {
-                // Secondary considerations must have an active pinpoint in the Diagnostic Visualization
                 const pinpointedSecondary = new Set(
                     (hotspots || []).filter(h => h.is_primary === false && h.disease).map(h => h.disease)
                 );
@@ -380,12 +508,23 @@ function renderResults(data) {
                     <p style="margin:8px 0 4px 0; font-size:0.85rem; color:#64748b;">The system pinpointed secondary lesion characteristics on the leaf for:</p>
                     <ul style="margin:4px 0 0 0; padding-left:18px;">
                         ${verifiedSecondary.map(m => `
-                            <li><strong>${m.name}</strong>: ${(parseFloat(m.similarity) * 100).toFixed(0)}% probability (Pinpointed on leaf)</li>
+                            <li><strong>${m.name}</strong>: ${parseFloat(m.similarity) >= 0.65 ? 'High Match' : 'Moderate Match'} (Pinpointed on leaf)</li>
                         `).join('')}
                     </ul>
                 </details>`;
             })()}
-        </div>`;
+        </div>
+        ${(data.treatments && data.treatments.length > 0) ? `
+            <div style="background:#f0fdf4; border:1.5px solid #bbf7d0; border-radius:14px; padding:18px 22px; margin-top:16px; text-align:left; box-shadow:0 2px 8px rgba(34,197,94,0.06);">
+                <h4 style="margin:0 0 10px; color:#166534; font-size:1rem; font-weight:700; display:flex; align-items:center; gap:8px;">
+                    🌱 Recommended Treatment & Agricultural Advice
+                </h4>
+                <ul style="margin:0; padding-left:22px; color:#14532d; font-size:0.9rem; line-height:1.7;">
+                    ${data.treatments.map(t => `<li>${t}</li>`).join('')}
+                </ul>
+            </div>
+        ` : ''}`;
+
 
     // Extract unique diseases among the pins for indicators and legend
     const pinDiseases = [];
@@ -512,7 +651,7 @@ function renderResults(data) {
                             <div class="popover-specs">
                                 <p class="popover-why"><strong id="popoverWhyLabel">Why Flagged:</strong> <span id="popoverWhyText">${whyDetected}</span></p>
                                 <div class="popover-signs"><strong>Key Signs:</strong> <span id="popoverSignsText">${diseaseSymptom}</span></div>
-                                <span class="popover-damage">Affected Leaf Area: ${infectedArea}%</span>
+                                <span class="popover-damage">Infection Spread: ${infectionSpreadPct} (${parseFloat(infectedArea) > 15 ? 'High' : (parseFloat(infectedArea) > 0 ? 'Low' : 'None')})</span>
                             </div>
                         </div>
 
@@ -538,11 +677,10 @@ function renderResults(data) {
             </div>`;
     }
 
-    // 4.4 Render bottom control buttons
+    // 4.4 Render bottom control buttons (Messenger removed)
     resultHTML += `
         <div class="action-footer" style="display: flex; gap: 10px; flex-wrap: wrap; align-items:center;">
-            <span style="font-size:0.8rem;color:#666;">👤 ${_user.full_name} &nbsp;|&nbsp; Scan #${data.scan_id || '—'}</span>
-            <button id="askExpertBtn" class="secondary-btn" style="flex: 1; min-width: 120px; padding: 10px; background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s;">👨‍🌾 Ask Expert on Messenger</button>
+            <span style="font-size:0.8rem;color:#666;">👤 ${_user.full_name || _user.username} &nbsp;|&nbsp; Scan #${data.scan_id || '—'}</span>
             <button id="downloadChartBtn" class="analyze-btn" style="flex: 1; min-width: 200px;">Download Full Report</button>
             <button onclick="palayscanLogout()" style="padding:10px 16px;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#fff;color:#666;font-size:0.85rem;">🚪 Logout</button>
         </div>`;
@@ -553,7 +691,7 @@ function renderResults(data) {
     // --- 4.5 BIND DIAGNOSTIC VIEW SWITCHER (RED MASK VS ORIGINAL LEAF) ---
     initDiagnosticViewSwitcher(data, previewRawSrc);
 
-    // --- 5. PDF REPORT GENERATOR ---
+    // --- 5. PDF REPORT GENERATOR (CATEGORICAL RESULTS ONLY - NO PERCENTAGES) ---
     // Converts the hidden formal template into an A4 PDF booklet.
     document.getElementById("downloadChartBtn").addEventListener("click", () => {
         const element = document.getElementById("pdfReportTemplate");
@@ -566,46 +704,49 @@ function renderResults(data) {
         // --- Populate the formal template ---
         const now = new Date();
         document.getElementById("repScanId").innerText = data.scan_id ? `#${data.scan_id}` : "Pending";
-        document.getElementById("repUserId").innerText = _user.full_name || "Unknown User";
+        document.getElementById("repUserId").innerText = _user.full_name || _user.username || "Registered User";
         document.getElementById("repDate").innerText = now.toLocaleString();
-        document.getElementById("repLocation").innerText = "Location Services Active";
+        document.getElementById("repLocation").innerText = _user.barangay ? `${_user.barangay}, Bacnotan` : "Bacnotan, La Union";
         
-        document.getElementById("repScoreValue").innerText = `${healthScore}%`;
+        // Infection Spread Percentage and Categorical Status
+        document.getElementById("repScoreValue").innerText = infectionSpreadPct;
         
         let primaryDisease = "Healthy";
-        let confidence = "100";
+        let matchRating = "High";
         if (data.visual_matches && data.visual_matches.length > 0) {
             primaryDisease = data.visual_matches[0].name;
-            confidence = (parseFloat(data.visual_matches[0].similarity) * 100).toFixed(0);
+            matchRating = parseFloat(data.visual_matches[0].similarity) >= 0.65 ? "High" : "Moderate";
         } else if (data.diseases && data.diseases.length > 0) {
             primaryDisease = data.diseases[0];
-            confidence = "90"; // Heuristic fallback
+            matchRating = "Moderate";
         }
         
-        document.getElementById("repAssessment").innerText = healthScore > 50 ? "Satisfactory field conditions." : "Attention needed. Disease indicators present.";
+        document.getElementById("repAssessment").innerText = isHealthy 
+            ? "Satisfactory field conditions (0% infection spread detected)." 
+            : `Disease indicators present with ${infectedArea}% infection spread (${parseFloat(infectedArea) > 15 ? 'High' : 'Low'} infection level).`;
         document.getElementById("repDiseaseName").innerText = primaryDisease;
-        document.getElementById("repConfidenceVal").innerText = `${confidence}%`;
-        document.getElementById("repConfFill").style.width = `${confidence}%`;
-        document.getElementById("repConfText").innerText = `${confidence}% match confidence based on visual characteristics.`;
+        document.getElementById("repConfidenceVal").innerText = `${matchRating} Match`;
+        document.getElementById("repConfFill").style.width = isHealthy ? "100%" : (matchRating === "High" ? "85%" : "60%");
+        document.getElementById("repConfText").innerText = `Categorical match based on visual symptoms.`;
         
         document.getElementById("repProfileText").innerText = primaryDisease === "Healthy" 
             ? "No significant disease profiles matched. Plant shows normal growth patterns." 
-            : `Visual characteristics strongly match known profiles for ${primaryDisease}.`;
+            : `Visual characteristics match known profiles for ${primaryDisease}.`;
             
         document.getElementById("repVisId").innerText = Date.now().toString(36).toUpperCase();
         document.getElementById("repHighlightImg").src = data.highlighted_image || sessionStorage.getItem('previewImageSrc');
         
-        document.getElementById("repRec1").innerText = healthScore > 50 ? "Continue regular watering and fertilization schedule." : `Isolate affected areas immediately to prevent ${primaryDisease} spread.`;
-        document.getElementById("repRec2").innerText = healthScore > 50 ? "Monitor crop weekly for any sudden changes." : `Apply recommended treatments for ${primaryDisease} within 48 hours.`;
+        document.getElementById("repRec1").innerText = isHealthy ? "Continue regular watering and fertilization schedule." : `Isolate affected areas immediately to prevent ${primaryDisease} spread.`;
+        document.getElementById("repRec2").innerText = isHealthy ? "Monitor crop weekly for any sudden changes." : `Apply recommended treatments for ${primaryDisease} within 48 hours.`;
         
         document.getElementById("repSystemId").innerText = `REP-${data.scan_id || Math.floor(Math.random()*10000)}`;
 
         const opt = {
-            margin: [0, 0], // Margins handled by CSS padding
+            margin: [0, 0],
             filename: `Palayscan_Official_Report_${data.scan_id || 'scan'}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
-                scale: 2, // High DPI rendering
+                scale: 2,
                 useCORS: true,
                 letterRendering: true,
                 scrollY: 0
@@ -613,7 +754,6 @@ function renderResults(data) {
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        // Make template visible to the renderer
         element.classList.add('active-pdf');
 
         setTimeout(() => {
@@ -625,21 +765,6 @@ function renderResults(data) {
                 window.print();
             });
         }, 500);
-    });
-
-    // --- 6. MESSENGER INTEGRATION (EXPERT-IN-THE-LOOP) ---
-    // Helps farmers directly message their diagnostic scan data to the Municipal Agriculture Office page.
-    document.getElementById("askExpertBtn").addEventListener("click", () => {
-        let detected = "an unknown issue";
-        if (data.confirmed_diseases && data.confirmed_diseases.length > 0) detected = data.confirmed_diseases.join(", ");
-        else if (data.visual_matches && data.visual_matches.length > 0) detected = data.visual_matches.map(m => m.name).join(", ");
-        else if (data.diseases && data.diseases.length > 0) detected = data.diseases.join(", ");
-
-        const message = `Magandang araw po! Ako po si ${_user.full_name}, isang magsasaka na gumagamit ng PALAYSCAN. Batay po sa scan ng app, ang aking palay ay may posibleng sakit na ${detected} (Scan ID: #${data.scan_id || 'N/A'}). Maaari po bang humingi ng payo o kumpirmasyon mula sa inyo?`;
-
-        // Direct Messenger link for predefined Municipal Agriculture Office recipient with text payload pre-loaded
-        const messengerLink = `https://m.me/PalayscanBacnotan?text=${encodeURIComponent(message)}`;
-        window.open(messengerLink, '_blank');
     });
 }
 

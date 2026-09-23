@@ -9,6 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body class="admin-body">
 
@@ -24,9 +26,12 @@
         </div>
         <nav class="admin-nav">
             <a href="#" class="admin-nav-link active" data-tab="dashboard" onclick="switchTab('dashboard',this)">📊 Dashboard</a>
+            <a href="#" class="admin-nav-link" data-tab="heatmap" onclick="switchTab('heatmap',this)">🗺️ Heat Map</a>
             <a href="#" class="admin-nav-link" data-tab="scans" onclick="switchTab('scans',this)">🔬 Scan Records</a>
             <a href="#" class="admin-nav-link" data-tab="users" onclick="switchTab('users',this)">👥 Manage Users</a>
             <a href="#" class="admin-nav-link" data-tab="diseases" onclick="switchTab('diseases',this)">🌿 Disease Database</a>
+            <a href="#" class="admin-nav-link" data-tab="audit" onclick="switchTab('audit',this)">📜 Audit Trail</a>
+            <a href="#" class="admin-nav-link" data-tab="backup" onclick="switchTab('backup',this)">💾 Backup & Restore</a>
             <a href="#" class="admin-nav-link" data-tab="reports" onclick="switchTab('reports',this)">📄 Generate Reports</a>
             <a href="index.html" class="admin-nav-link desktop-run-scan" style="border: 1.5px dashed rgba(34,197,94,0.4); margin-top: 10px; color: #4ade80; font-weight: 600;">🔍 Run Leaf Scan</a>
         </nav>
@@ -127,6 +132,109 @@
             </div>
         </div>
 
+        <!-- BARANGAY DISEASE HEAT MAP TAB -->
+        <div id="tab-heatmap" class="admin-tab" style="display:none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+                <div>
+                    <h1 class="admin-page-title" style="margin: 0;">🗺️ Barangay Disease Heat Map</h1>
+                    <p style="color: #64748b; font-size: 0.9rem; margin-top: 4px;">Geographic disease distribution & concentration across all 47 barangays of Bacnotan, La Union.</p>
+                </div>
+                <button onclick="loadHeatmapData()" style="padding: 10px 18px; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 10px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">🔄 Refresh Heat Map</button>
+            </div>
+
+            <!-- Controls Row -->
+            <div class="admin-filter-container" style="margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px;">
+                    <label for="heatmapDiseaseFilter" style="font-weight: 600; font-size: 0.85rem; color: #334155; white-space: nowrap;">Target Disease:</label>
+                    <select id="heatmapDiseaseFilter" class="admin-filter-select" onchange="filterHeatmapMarkers()" style="width: 100%;">
+                        <option value="">All Detected Diseases</option>
+                        <option value="Blight">Bacterial Leaf Blight</option>
+                        <option value="Blast">Rice Blast</option>
+                        <option value="Brown Spot">Brown Spot</option>
+                        <option value="Rust">Leaf Rust</option>
+                        <option value="Leaf Streak">Leaf Streak</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px;">
+                    <label for="heatmapBarangaySelect" style="font-weight: 600; font-size: 0.85rem; color: #334155; white-space: nowrap;">Focus Barangay:</label>
+                    <select id="heatmapBarangaySelect" class="admin-filter-select" onchange="zoomToBarangay(this.value)" style="width: 100%;">
+                        <option value="">-- All 47 Barangays --</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Summary Metrics -->
+            <div class="admin-stats-grid" style="margin-bottom: 20px;">
+                <div class="admin-stat-card">
+                    <div class="admin-stat-icon">📍</div>
+                    <div class="admin-stat-info">
+                        <span id="hmTotalBarangays">47</span>
+                        <p>Barangays Monitored</p>
+                    </div>
+                </div>
+                <div class="admin-stat-card diseased">
+                    <div class="admin-stat-icon">🔥</div>
+                    <div class="admin-stat-info">
+                        <span id="hmHotspotBarangay" style="font-size: 1.2rem;">—</span>
+                        <p>Highest Concentration</p>
+                    </div>
+                </div>
+                <div class="admin-stat-card healthy">
+                    <div class="admin-stat-icon">🛡️</div>
+                    <div class="admin-stat-info">
+                        <span id="hmCleanBarangays">—</span>
+                        <p>Zero Disease Reported</p>
+                    </div>
+                </div>
+                <div class="admin-stat-card">
+                    <div class="admin-stat-icon">🌾</div>
+                    <div class="admin-stat-info">
+                        <span id="hmTotalCasesMapped">—</span>
+                        <p>Total Scans Mapped</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Container -->
+            <div class="admin-chart-card" style="padding: 16px; position: relative;">
+                <div id="barangayHeatmap" style="height: 520px; width: 100%; border-radius: 14px; z-index: 1;"></div>
+                <!-- Map Legend -->
+                <div class="heatmap-legend">
+                    <h4>Concentration Level</h4>
+                    <div class="legend-item"><span class="legend-dot dot-zero"></span> 0 Cases (Safe)</div>
+                    <div class="legend-item"><span class="legend-dot dot-low"></span> 1 - 2 Cases (Low)</div>
+                    <div class="legend-item"><span class="legend-dot dot-med"></span> 3 - 5 Cases (Moderate)</div>
+                    <div class="legend-item"><span class="legend-dot dot-high"></span> 6+ Cases (Hotspot)</div>
+                </div>
+            </div>
+
+            <!-- Barangay Breakdown Table -->
+            <div class="admin-chart-card" style="margin-top: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                    <h3>📋 Barangay Disease Concentration Directory</h3>
+                    <input type="text" id="barangayTableSearch" placeholder="🔍 Search barangay..." onkeyup="filterBarangayTable()" style="padding: 8px 14px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.85rem; width: 220px;">
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Barangay</th>
+                                <th>Total Scans</th>
+                                <th>Diseased</th>
+                                <th>Healthy</th>
+                                <th>Primary Disease</th>
+                                <th>Risk Level</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="barangayBreakdownBody">
+                            <tr><td colspan="7" style="text-align:center;padding:24px;">Loading barangay data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- SCAN RECORDS TAB -->
         <div id="tab-scans" class="admin-tab" style="display:none;">
             <h1 class="admin-page-title">Scan Records</h1>
@@ -143,7 +251,7 @@
                     <option value="blast">Blast</option>
                     <option value="brown spot">Brown Spot</option>
                     <option value="rust">Rust</option>
-                    <option value="leaf strip">Leaf Strip</option>
+                    <option value="leaf streak">Leaf Streak</option>
                 </select>
             </div>
             <div class="admin-table-wrap">
@@ -155,9 +263,9 @@
                             <th>User</th>
                             <th>Barangay</th>
                             <th>Disease Detected</th>
-                            <th>Health Score</th>
-                            <th>Status</th>
+                            <th>Health Status</th>
                             <th>Weather</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="scansBody">
@@ -194,11 +302,11 @@
                         <tr>
                             <th>#</th>
                             <th>Full Name</th>
-                            <th>Email</th>
+                            <th>Username</th>
                             <th>Role</th>
                             <th>Address</th>
                             <th>Sex</th>
-                            <th>Age</th>
+                            <th>Age (DOB)</th>
                             <th>Barangay</th>
                             <th>Contact</th>
                             <th>Registered</th>
@@ -223,7 +331,7 @@
                     <select id="newDiseaseSelect" style="flex:1;min-width:160px;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-family:Poppins,sans-serif;font-size:0.9rem;">
                         <option value="">Select disease...</option>
                         <option>Blight</option><option>Blast</option><option>Brown Spot</option>
-                        <option>Rust</option><option>Leaf Strip</option><option>Healthy</option>
+                        <option>Rust</option><option>Leaf Streak</option><option>Healthy</option>
                     </select>
                     <input type="text" id="newAdviceText" placeholder="Enter treatment advice step..." style="flex:3;min-width:240px;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-family:Poppins,sans-serif;font-size:0.9rem;">
                     <button onclick="addAdvice()" style="padding:10px 24px;background:linear-gradient(135deg,#22c55e,#166534);color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;font-family:Poppins,sans-serif;">+ Add</button>
@@ -246,29 +354,140 @@
             <div id="diseasesPagination" class="admin-pagination"></div>
         </div>
 
+        <!-- AUDIT TRAIL TAB -->
+        <div id="tab-audit" class="admin-tab" style="display:none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+                <div>
+                    <h1 class="admin-page-title" style="margin: 0;">📜 System Audit Trail</h1>
+                    <p style="color: #64748b; font-size: 0.9rem; margin-top: 4px;">Immutable event log tracking user registrations, logins, leaf scans, account actions, and administrative operations.</p>
+                </div>
+                <button onclick="loadAuditLogs()" style="padding: 10px 18px; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 10px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">🔄 Refresh Logs</button>
+            </div>
+
+            <div class="admin-filter-container">
+                <input type="text" id="auditSearchInput" class="admin-search-input" placeholder="🔍 Search by username, action, IP, or details..." onkeyup="filterAuditLogs()">
+                <select id="auditActionFilter" class="admin-filter-select" onchange="filterAuditLogs()" style="flex:0.35;min-width:180px;">
+                    <option value="">All Actions</option>
+                    <option value="USER_REGISTER">User Registration</option>
+                    <option value="USER_LOGIN">User Login</option>
+                    <option value="USER_LOGOUT">User Logout</option>
+                    <option value="LEAF_SCAN">Leaf Scan Conducted</option>
+                    <option value="USER_DELETE">User Deleted</option>
+                    <option value="STAFF_ADMIT">Staff Admitted</option>
+                    <option value="STAFF_REJECT">Staff Rejected</option>
+                    <option value="ADVICE_ADD">Advice Added</option>
+                    <option value="ADVICE_EDIT">Advice Updated</option>
+                    <option value="ADVICE_DELETE">Advice Removed</option>
+                    <option value="BACKUP_EXPORT">Backup Downloaded</option>
+                    <option value="DATABASE_RESTORE">Database Restored</option>
+                </select>
+            </div>
+
+            <div class="admin-table-wrap">
+                <table class="admin-table" id="auditTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Timestamp</th>
+                            <th>Action</th>
+                            <th>User / Performer</th>
+                            <th>IP Address</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditBody">
+                        <tr><td colspan="6" style="text-align:center;padding:30px;">Loading audit trail...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="auditPagination" class="admin-pagination"></div>
+        </div>
+
+        <!-- DATABASE BACKUP & RESTORE TAB -->
+        <div id="tab-backup" class="admin-tab" style="display:none;">
+            <h1 class="admin-page-title">💾 Database Backup & Restore</h1>
+            <p style="color: #64748b; font-size: 0.9rem; margin-top: -10px; margin-bottom: 24px;">Create complete snapshots of all database tables and uploaded leaf images, or restore the system state from an existing backup archive.</p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+                <!-- Backup Card -->
+                <div class="admin-chart-card" style="border-top: 4px solid #22c55e;">
+                    <div style="font-size: 2.5rem; margin-bottom: 12px;">📦</div>
+                    <h3 style="margin-bottom: 8px;">Export System Backup</h3>
+                    <p style="font-size: 0.88rem; color: #64748b; line-height: 1.5; margin-bottom: 16px;">
+                        Generates a secure compressed <code>.zip</code> archive containing:
+                    </p>
+                    <ul style="font-size: 0.85rem; color: #334155; margin-bottom: 24px; padding-left: 20px; line-height: 1.8;">
+                        <li><strong>Complete MariaDB database dump</strong> (<code>database_dump.json</code>) including users, scan records, treatments, and audit logs</li>
+                        <li><strong>All uploaded leaf images</strong> preserved in the <code>uploads/</code> directory</li>
+                    </ul>
+                    <button id="backupBtn" onclick="downloadBackup()" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #22c55e, #166534); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 700; font-family: Poppins, sans-serif; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(34,197,94,0.3);">
+                        <span>⬇ Download Full Backup (.zip)</span>
+                    </button>
+                    <div id="backupMsg" style="margin-top: 12px; font-size: 0.85rem; text-align: center;"></div>
+                </div>
+
+                <!-- Restore Card -->
+                <div class="admin-chart-card" style="border-top: 4px solid #ef4444;">
+                    <div style="font-size: 2.5rem; margin-bottom: 12px;">🔄</div>
+                    <h3 style="margin-bottom: 8px;">Restore System from Backup</h3>
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 12px; margin-bottom: 16px; color: #991b1b; font-size: 0.82rem; line-height: 1.5;">
+                        <strong>⚠️ Critical Notice:</strong> Restoring will merge/repopulate database records and unpack leaf images back into server storage. Only upload valid ZIP archives created by PalayScan.
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <label for="restoreFileInput" style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 8px; color: #334155;">Select Backup Archive (.zip):</label>
+                        <input type="file" id="restoreFileInput" accept=".zip" style="width: 100%; padding: 10px; border: 1.5px dashed #cbd5e1; border-radius: 10px; font-size: 0.85rem; background: #fff;">
+                    </div>
+                    <button id="restoreBtn" onclick="performRestore()" style="width: 100%; padding: 14px; background: #ef4444; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 700; font-family: Poppins, sans-serif; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(239,68,68,0.3);">
+                        <span>🔄 Start System Restore</span>
+                    </button>
+                    <div id="restoreMsg" style="margin-top: 12px; font-size: 0.85rem; text-align: center;"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- GENERATE REPORTS TAB -->
         <div id="tab-reports" class="admin-tab" style="display:none;">
             <h1 class="admin-page-title">📄 Generate Reports</h1>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;">
 
+                <!-- Overall Scan CSV -->
                 <div class="admin-chart-card">
                     <div style="font-size:3rem;margin-bottom:16px;">📊</div>
-                    <h3 style="margin-bottom:8px;">Scan Records Report</h3>
-                    <p style="font-size:0.85rem;color:#64748b;margin-bottom:20px;">Export all scan records including user, disease, health score, and advice as a CSV file.</p>
-                    <button onclick="downloadCSV()" style="width:100%;padding:12px;background:linear-gradient(135deg,#22c55e,#166534);color:white;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Poppins,sans-serif;font-size:0.95rem;">⬇ Download CSV Report</button>
+                    <h3 style="margin-bottom:8px;">All Scan Records Report</h3>
+                    <p style="font-size:0.85rem;color:#64748b;margin-bottom:20px;">Export all scan records including user, barangay, disease, health status, and advice as a comprehensive CSV file.</p>
+                    <button onclick="downloadCSV()" style="width:100%;padding:12px;background:linear-gradient(135deg,#22c55e,#166534);color:white;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Poppins,sans-serif;font-size:0.95rem;">⬇ Download Full CSV</button>
                 </div>
 
+                <!-- Location-Specific Barangay Report -->
+                <div class="admin-chart-card" style="border-top: 4px solid #3b82f6;">
+                    <div style="font-size:3rem;margin-bottom:16px;">📍</div>
+                    <h3 style="margin-bottom:8px;">Location-Specific Barangay Report</h3>
+                    <p style="font-size:0.85rem;color:#64748b;margin-bottom:14px;">Generate and export dedicated reports for any specific barangay in Bacnotan, including localized disease incidence and farmer scans.</p>
+                    <div style="margin-bottom: 14px;">
+                        <label for="reportBarangaySelect" style="display: block; font-weight: 600; font-size: 0.82rem; margin-bottom: 6px; color: #334155;">Choose Barangay:</label>
+                        <select id="reportBarangaySelect" class="admin-filter-select" style="width: 100%; padding: 10px 14px; border: 1.5px solid #cbd5e1; border-radius: 10px;">
+                            <option value="">-- Select Barangay --</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-direction: column;">
+                        <button onclick="downloadBarangayCSV()" style="width:100%;padding:11px;background:#3b82f6;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;font-family:Poppins,sans-serif;font-size:0.9rem;">⬇ Download Barangay CSV</button>
+                        <button onclick="openBarangaySummaryModal()" style="width:100%;padding:11px;background:#f1f5f9;color:#1e293b;border:1.5px solid #cbd5e1;border-radius:10px;cursor:pointer;font-weight:600;font-family:Poppins,sans-serif;font-size:0.9rem;">📋 View Printable Summary</button>
+                    </div>
+                </div>
+
+                <!-- User Summary -->
                 <div class="admin-chart-card">
                     <div style="font-size:3rem;margin-bottom:16px;">👥</div>
-                    <h3 style="margin-bottom:8px;">User Summary</h3>
-                    <p style="font-size:0.85rem;color:#64748b;margin-bottom:20px;">View all registered users, their roles, barangay, and registration date.</p>
+                    <h3 style="margin-bottom:8px;">User Directory Summary</h3>
+                    <p style="font-size:0.85rem;color:#64748b;margin-bottom:20px;">View all registered users, their roles, barangays, age, and registration activity.</p>
                     <button onclick="switchTab('users', document.querySelector('[data-tab=users]'))" style="width:100%;padding:12px;background:#1e293b;color:white;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Poppins,sans-serif;font-size:0.95rem;">👁 View Users Table</button>
                 </div>
 
+                <!-- Dashboard Summary -->
                 <div class="admin-chart-card">
                     <div style="font-size:3rem;margin-bottom:16px;">📈</div>
-                    <h3 style="margin-bottom:8px;">Dashboard Summary</h3>
-                    <p style="font-size:0.85rem;color:#64748b;margin-bottom:20px;">View aggregate stats: total scans, healthy vs unhealthy results, and top diseases chart.</p>
+                    <h3 style="margin-bottom:8px;">Dashboard Analytics</h3>
+                    <p style="font-size:0.85rem;color:#64748b;margin-bottom:20px;">View aggregate metrics: total scans, healthy vs unhealthy proportions, and disease breakdown.</p>
                     <button onclick="switchTab('dashboard', document.querySelector('[data-tab=dashboard]'))" style="width:100%;padding:12px;background:#0f172a;color:white;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Poppins,sans-serif;font-size:0.95rem;">📊 View Dashboard</button>
                 </div>
 
@@ -277,12 +496,78 @@
 
     </main>
 </div>
+
+<!-- BARANGAY PRINTABLE SUMMARY MODAL -->
+<div id="barangaySummaryModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center; padding:20px;">
+    <div class="modal-box printable-modal" style="max-width: 780px; width: 100%; max-height: 90vh; overflow-y: auto; background: white; border-radius: 16px; padding: 30px; box-shadow: 0 20px 50px rgba(0,0,0,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #e2e8f0; padding-bottom: 14px; margin-bottom: 18px;">
+            <div>
+                <h2 id="modalBarangayTitle" style="margin: 0; color: #166534; font-size: 1.4rem;">Barangay Health Summary</h2>
+                <p style="margin: 4px 0 0; color: #64748b; font-size: 0.85rem;">Municipality of Bacnotan • Rice Health & Disease Report</p>
+            </div>
+            <button onclick="closeBarangayModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; line-height:1;">✕</button>
+        </div>
+        
+        <div id="modalBarangayContent">
+            <!-- Dynamic report content -->
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+            <button onclick="window.print()" class="no-print" style="padding: 10px 20px; background: #166534; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: Poppins, sans-serif;">🖨️ Print / Save PDF</button>
+            <button onclick="closeBarangayModal()" class="no-print" style="padding: 10px 18px; background: #e2e8f0; color: #334155; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: Poppins, sans-serif;">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- SCAN DETAIL & SCANNED IMAGE INSPECTION MODAL -->
+<div id="scanDetailModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); backdrop-filter:blur(4px); z-index:9999; justify-content:center; align-items:center; padding:20px;">
+    <div class="modal-box" style="max-width: 820px; width: 100%; max-height: 92vh; overflow-y: auto; background: white; border-radius: 18px; padding: 26px; box-shadow: 0 25px 60px rgba(0,0,0,0.35);">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 14px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.8rem;">🔬</span>
+                <div>
+                    <h2 id="modalScanTitle" style="margin: 0; color: #0f172a; font-size: 1.35rem; font-weight: 800;">Scan Details</h2>
+                    <p id="modalScanSubtitle" style="margin: 3px 0 0; color: #64748b; font-size: 0.85rem;">Scanned Rice Leaf Image & Diagnostic Inspection</p>
+                </div>
+            </div>
+            <button onclick="closeScanModal()" style="background: #f1f5f9; border: none; font-size: 1.2rem; cursor: pointer; color: #475569; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">✕</button>
+        </div>
+        
+        <div id="modalScanBody">
+            <!-- Dynamic scan details & image -->
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 16px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <a id="modalGoToScanPageBtn" href="#" style="padding: 10px 18px; background: #166534; color: white; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(22,101,52,0.25);">
+                    🔬 Open Full Scanner Page &rarr;
+                </a>
+                <button id="modalViewInTableBtn" style="padding: 10px 16px; background: #0284c7; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.88rem; display: flex; align-items: center; gap: 6px;">
+                    📋 View in Scan Records Tab
+                </button>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <a id="modalFullImgBtn" href="#" target="_blank" style="padding: 10px 16px; background: #f8fafc; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 6px;">
+                    🖼️ Open Original Image
+                </a>
+                <button onclick="closeScanModal()" style="padding: 10px 20px; background: #e2e8f0; color: #334155; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.88rem;">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- CUSTOM ANIMATED MOBILE TAB BAR -->
 <div id="mobile-nav-container">
-	<div class="tab-nav-container">
+	<div class="tab-nav-container" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
 		<div class="tab active" data-target-tab="dashboard">
 			<i class="emoji">📊</i>
 			<p>Home</p>
+		</div>
+		<div class="tab" data-target-tab="heatmap">
+			<i class="emoji">🗺️</i>
+			<p>Map</p>
 		</div>
 		<div class="tab" data-target-tab="scans">
 			<i class="emoji">🔬</i>
@@ -295,6 +580,14 @@
 		<div class="tab" data-target-tab="diseases">
 			<i class="emoji">🌿</i>
 			<p>Diseases</p>
+		</div>
+		<div class="tab" data-target-tab="audit">
+			<i class="emoji">📜</i>
+			<p>Audit</p>
+		</div>
+		<div class="tab" data-target-tab="backup">
+			<i class="emoji">💾</i>
+			<p>Backup</p>
 		</div>
         <div class="tab" data-target-tab="reports">
 			<i class="emoji">📄</i>
