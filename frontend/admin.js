@@ -1441,6 +1441,7 @@ async function openBarangaySummaryModal(barangayName) {
         const res = await fetch(`${API_BASE_URL}/admin/report/barangay-summary?barangay=${encodeURIComponent(brgy)}`, { headers: authHeaders() });
         if (!res.ok) throw new Error('Could not load barangay summary');
         const data = await res.json();
+        currentBarangayReport = { barangay: brgy, data: data };
 
         const totalScans = data.total_scans || 0;
         const diseasedScans = (data.unhealthy_scans !== undefined ? data.unhealthy_scans : data.diseased_scans) || 0;
@@ -1564,9 +1565,175 @@ async function openBarangaySummaryModal(barangayName) {
     }
 }
 
+let currentBarangayReport = null;
+
 function closeBarangayModal() {
     const modal = document.getElementById('barangaySummaryModal');
     if (modal) modal.style.display = 'none';
+}
+
+function exportBarangayReportPdf() {
+    if (!currentBarangayReport || !currentBarangayReport.data) {
+        alert('Barangay report data is still loading. Please wait a moment.');
+        return;
+    }
+
+    const { barangay, data } = currentBarangayReport;
+    const element = document.getElementById('barangayPdfReportTemplate');
+    const btn = document.getElementById('btnPrintBarangayReport');
+    if (!element) {
+        window.print();
+        return;
+    }
+
+    // 1. Populate Metadata
+    const brgyEl = document.getElementById('bRepBarangay');
+    if (brgyEl) brgyEl.textContent = `Barangay ${barangay}`;
+
+    const farmersEl = document.getElementById('bRepFarmers');
+    if (farmersEl) farmersEl.textContent = data.total_farmers || '0';
+
+    const nowPHT = new Date().toLocaleString('en-US', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    });
+    const dateEl = document.getElementById('bRepDate');
+    if (dateEl) dateEl.textContent = nowPHT;
+
+    const docIdEl = document.getElementById('bRepDocId');
+    if (docIdEl) docIdEl.textContent = `PALAY-BRGY-${barangay.toUpperCase().replace(/[^A-Z0-9]/g, '')}-${data.total_scans || '0'}`;
+
+    // 2. Populate 4 Summary Metrics
+    const totalScans = data.total_scans || 0;
+    const diseasedScans = (data.unhealthy_scans !== undefined ? data.unhealthy_scans : data.diseased_scans) || 0;
+    const healthyScans = data.healthy_scans || 0;
+    const primaryDisease = data.primary_disease || data.top_disease || (diseasedScans === 0 ? 'Healthy Field' : 'None Reported');
+
+    const totEl = document.getElementById('bRepTotalScans');
+    if (totEl) totEl.textContent = totalScans;
+
+    const unhEl = document.getElementById('bRepUnhealthyCases');
+    if (unhEl) unhEl.textContent = diseasedScans;
+
+    const hthEl = document.getElementById('bRepHealthyCases');
+    if (hthEl) hthEl.textContent = healthyScans;
+
+    const priEl = document.getElementById('bRepPrimaryDisease');
+    if (priEl) priEl.textContent = primaryDisease;
+
+    // 3. Populate Disease Occurrence & Diagnostic Samples
+    const counts = data.disease_counts || {};
+    const samples = data.disease_samples || {};
+    const diseaseBreakdownEl = document.getElementById('bRepDiseaseBreakdown');
+    if (diseaseBreakdownEl) {
+        const entries = Array.isArray(counts)
+            ? counts.map(item => [item.disease, item.count])
+            : Object.entries(counts);
+
+        if (!entries.length || diseasedScans === 0) {
+            diseaseBreakdownEl.innerHTML = `
+                <div style="background:#f0fdf4; border:1.5px solid #bbf7d0; border-radius:6px; padding:8px 12px; text-align:center; grid-column:1/-1;">
+                    <strong style="color:#166534; font-size:9.5pt;">🛡️ Zero Active Rice Diseases Reported in Barangay ${escapeHtml(barangay)}</strong>
+                    <p style="margin:2px 0 0; font-size:7.8pt; color:#15803d;">All monitored rice fields exhibit healthy vegetative canopy conditions.</p>
+                </div>
+            `;
+        } else {
+            diseaseBreakdownEl.innerHTML = entries.map(([disease, count]) => {
+                const diseaseImages = samples[disease] || [];
+                const sampleImg = diseaseImages[0] ? resolveMediaUrl(diseaseImages[0].image_url) : '';
+                return `
+                    <div style="border:1.5px solid #cbd5e1; border-radius:6px; background:#fff; padding:6px 10px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                        <div>
+                            <div style="font-size:9pt; font-weight:800; color:#1e293b;">${escapeHtml(disease)}</div>
+                            <div style="font-size:8pt; font-weight:700; color:#dc2626;">${count} Incident${count !== 1 ? 's' : ''}</div>
+                            ${diseaseImages[0] ? `<div style="font-size:6.8pt; color:#64748b; margin-top:2px;">Scan #${diseaseImages[0].scan_id} • ${escapeHtml(diseaseImages[0].farmer || 'Farmer')}</div>` : ''}
+                        </div>
+                        ${sampleImg ? `
+                            <img src="${sampleImg}" alt="${escapeHtml(disease)}" style="width:48px; height:48px; object-fit:cover; border-radius:6px; border:1.5px solid #94a3b8; flex-shrink:0; background:#f1f5f9;" crossorigin="anonymous" />
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    // 4. Populate Scan Registry Table (up to 7 scans to fit A4 cleanly)
+    const scanTableBody = document.getElementById('bRepScanTableBody');
+    if (scanTableBody) {
+        const recentScans = data.recent_scans || [];
+        if (!recentScans.length) {
+            scanTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:8px; color:#64748b;">No individual scan records filed for this jurisdiction.</td></tr>';
+        } else {
+            scanTableBody.innerHTML = recentScans.slice(0, 7).map(s => {
+                const diseaseName = s.detected_diseases || s.disease || (s.is_healthy ? 'Healthy' : 'Not Healthy');
+                const isHealthy = s.is_healthy === true;
+                return `
+                    <tr style="border-bottom:1px solid #e2e8f0;">
+                        <td style="padding:4px 6px; font-family:monospace; font-size:7.5pt;">${s.created_at ? s.created_at.substring(0, 16) : '—'}</td>
+                        <td style="padding:4px 6px; font-weight:700;">${escapeHtml(s.user_name || s.username || 'Farmer')}</td>
+                        <td style="padding:4px 6px; font-weight:700; color:${isHealthy ? '#166534' : '#dc2626'};">${isHealthy ? '🛡️ Healthy Field' : `🌾 ${escapeHtml(diseaseName)}`}</td>
+                        <td style="padding:4px 6px; text-align:center;">
+                            <span style="display:inline-block; padding:1px 6px; border-radius:4px; font-size:7pt; font-weight:700; background:${isHealthy ? '#dcfce7' : '#fee2e2'}; color:${isHealthy ? '#15803d' : '#991b1b'};">
+                                ${isHealthy ? 'HEALTHY' : 'NOT HEALTHY'}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+
+    // 5. Populate Recommendations
+    const rec1 = document.getElementById('bRepRec1');
+    const rec2 = document.getElementById('bRepRec2');
+    if (diseasedScans > 0) {
+        if (rec1) rec1.innerHTML = `<strong>Foliar Disease Protocol:</strong> Implement containment measures for detected ${escapeHtml(primaryDisease)} cases. Isolate affected paddy basins and apply recommended bio-fungicidal control.`;
+        if (rec2) rec2.innerHTML = `<strong>Water & Nutrient Regulation:</strong> Temporarily drain excess stagnant water and withhold excessive nitrogen application which exacerbates foliar lesions.`;
+    } else {
+        if (rec1) rec1.innerHTML = `<strong>Crop Canopy Preservation:</strong> Maintain balanced nutrient management and consistent field surveillance to sustain zero-incidence health.`;
+        if (rec2) rec2.innerHTML = `<strong>Water & Pest Scouting:</strong> Continue standard rotational flooding and monitor boundary bunds for early brown planthopper or stem borer activity.`;
+    }
+
+    // 6. Execute Export via html2pdf or window.print fallback
+    if (typeof html2pdf === 'undefined') {
+        window.print();
+        return;
+    }
+
+    const originalBtnText = btn ? btn.innerHTML : '🖨️ Print / Save PDF';
+    if (btn) btn.innerHTML = '⏳ Generating PDF...';
+    element.classList.add('active-pdf');
+
+    const opt = {
+        margin: 0,
+        filename: `PalayScan_Barangay_Report_${barangay.replace(/\s+/g, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+            scale: 2,
+            useCORS: true,
+            letterRendering: true,
+            scrollY: 0
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: 'avoid-all' }
+    };
+
+    setTimeout(() => {
+        html2pdf().set(opt).from(element).save().then(() => {
+            element.classList.remove('active-pdf');
+            if (btn) btn.innerHTML = originalBtnText;
+        }).catch(err => {
+            console.error('PDF Export Error:', err);
+            element.classList.remove('active-pdf');
+            if (btn) btn.innerHTML = originalBtnText;
+            window.print();
+        });
+    }, 450);
 }
 
 function resolveMediaUrl(url) {

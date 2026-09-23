@@ -2500,7 +2500,8 @@ main {
 /* ========================================================= */
 /* FORMAL PDF REPORT TEMPLATE STYLING (HIDDEN ON WEB)        */
 /* ========================================================= */
-#pdfReportTemplate {
+#pdfReportTemplate,
+#barangayPdfReportTemplate {
     width: 210mm;
     max-width: 210mm;
     height: 296mm;
@@ -2508,7 +2509,7 @@ main {
     background: #ffffff;
     color: #1a1a1a;
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    padding: 12mm 16mm 12mm 16mm;
+    padding: 10mm 14mm;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -2521,7 +2522,8 @@ main {
     overflow: hidden;
 }
 
-#pdfReportTemplate.active-pdf {
+#pdfReportTemplate.active-pdf,
+#barangayPdfReportTemplate.active-pdf {
     position: relative;
     left: 0;
     z-index: 9999;
@@ -3242,23 +3244,28 @@ main {
     }
 }
 
-/* Printable Barangay Modal Styles */
+/* Printable Formal Document Styles */
 @media print {
     body * {
-        visibility: hidden;
+        visibility: hidden !important;
     }
-    .printable-modal, .printable-modal * {
-        visibility: visible;
+    #barangayPdfReportTemplate, #barangayPdfReportTemplate *,
+    #pdfReportTemplate, #pdfReportTemplate * {
+        visibility: visible !important;
     }
-    .printable-modal {
-        position: absolute;
-        left: 0;
-        top: 0;
+    #barangayPdfReportTemplate,
+    #pdfReportTemplate {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
+        height: auto !important;
+        display: flex !important;
         box-shadow: none !important;
-        padding: 0 !important;
+        padding: 8mm 12mm !important;
         margin: 0 !important;
+        background: #ffffff !important;
     }
     .no-print {
         display: none !important;

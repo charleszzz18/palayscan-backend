@@ -11,6 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="admin-body">
 
@@ -515,8 +516,8 @@
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
-            <button onclick="window.print()" class="no-print" style="padding: 10px 20px; background: #166534; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: Poppins, sans-serif;">🖨️ Print / Save PDF</button>
-            <button onclick="closeBarangayModal()" class="no-print" style="padding: 10px 18px; background: #e2e8f0; color: #334155; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: Poppins, sans-serif;">Close</button>
+            <button type="button" onclick="exportBarangayReportPdf()" id="btnPrintBarangayReport" class="no-print" style="padding: 10px 22px; background: #166534; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: Poppins, sans-serif; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 6px rgba(22,101,52,0.25);">🖨️ Print / Save PDF</button>
+            <button type="button" onclick="closeBarangayModal()" class="no-print" style="padding: 10px 18px; background: #e2e8f0; color: #334155; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: Poppins, sans-serif;">Close</button>
         </div>
     </div>
 </div>
@@ -643,7 +644,112 @@
     </div>
 </div>
 
+<!-- FORMAL BARANGAY A4 PDF REPORT TEMPLATE (Hidden by default, used by html2pdf and print) -->
+<div id="barangayPdfReportTemplate" style="display: none;">
+    <!-- Header -->
+    <div class="report-header">
+        <div class="report-header-left">
+            <div class="report-logo">🌾</div>
+            <div class="report-title-group">
+                <h2>OFFICIAL BARANGAY RICE CROP</h2>
+                <h2>HEALTH & EPIDEMIOLOGICAL REPORT</h2>
+                <p style="margin:2px 0 0; font-size:8pt; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Municipality of Bacnotan • Province of La Union</p>
+            </div>
+        </div>
+        <div class="report-header-right">
+            <div class="stamp-circle">🌾<br>PALAYSCAN<br>OFFICIAL</div>
+        </div>
+    </div>
+
+    <!-- Administrative & Scan Details Box -->
+    <div class="report-scan-details" style="margin-top: 8px;">
+        <div class="rsd-header">BARANGAY JURISDICTION & EPIDEMIOLOGICAL METADATA</div>
+        <div class="rsd-body">
+            <div class="rsd-col">
+                <p><strong>Barangay Jurisdiction:</strong> <span id="bRepBarangay">—</span></p>
+                <p><strong>Municipality:</strong> Bacnotan, La Union</p>
+                <p><strong>Registered Farmers Monitored:</strong> <span id="bRepFarmers">0</span> Accounts</p>
+            </div>
+            <div class="rsd-col">
+                <p><strong>Date of Analysis:</strong> <span id="bRepDate">—</span></p>
+                <p><strong>System Document ID:</strong> <span id="bRepDocId">—</span></p>
+                <p><strong>Certified Authority:</strong> Office of the Municipal Agriculturist</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4 High-Impact Summary Metric Cards -->
+    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 8px;">
+        <div style="border:1.5px solid #bbf7d0; background:#f0fdf4; border-radius:6px; padding:8px 10px; text-align:center;">
+            <span style="font-size:16pt; font-weight:800; color:#166534; display:block;" id="bRepTotalScans">0</span>
+            <span style="font-size:7.5pt; font-weight:700; color:#15803d; text-transform:uppercase;">Total Scans Monitored</span>
+        </div>
+        <div style="border:1.5px solid #fecaca; background:#fef2f2; border-radius:6px; padding:8px 10px; text-align:center;">
+            <span style="font-size:16pt; font-weight:800; color:#dc2626; display:block;" id="bRepUnhealthyCases">0</span>
+            <span style="font-size:7.5pt; font-weight:700; color:#b91c1c; text-transform:uppercase;">Unhealthy Cases</span>
+        </div>
+        <div style="border:1.5px solid #bbf7d0; background:#f0fdf4; border-radius:6px; padding:8px 10px; text-align:center;">
+            <span style="font-size:16pt; font-weight:800; color:#166534; display:block;" id="bRepHealthyCases">0</span>
+            <span style="font-size:7.5pt; font-weight:700; color:#15803d; text-transform:uppercase;">Healthy Field Cases</span>
+        </div>
+        <div style="border:1.5px solid #fde68a; background:#fffbeb; border-radius:6px; padding:8px 10px; text-align:center;">
+            <span style="font-size:12pt; font-weight:800; color:#b45309; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="bRepPrimaryDisease">None</span>
+            <span style="font-size:7.5pt; font-weight:700; color:#92400e; text-transform:uppercase;">Primary Detected Threat</span>
+        </div>
+    </div>
+
+    <!-- Disease Occurrence & Field Evidence Photos -->
+    <div style="margin-top: 10px;">
+        <h3 class="rm-section-title" style="margin-bottom: 6px; font-size:10pt; border-bottom:1.5px solid #e2e8f0; padding-bottom:3px;">
+            🔬 DISEASE OCCURRENCE & DIAGNOSTIC EVIDENCE SAMPLES
+        </h3>
+        <div id="bRepDiseaseBreakdown" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+            <!-- Injected dynamically with disease count and clean evidence photos -->
+        </div>
+    </div>
+
+    <!-- Scan History / Registry Table -->
+    <div style="margin-top: 10px;">
+        <h3 class="rm-section-title" style="margin-bottom: 6px; font-size:10pt; border-bottom:1.5px solid #e2e8f0; padding-bottom:3px;">
+            📜 BARANGAY FIELD SCAN REGISTRY & STATUS LOG
+        </h3>
+        <table style="width:100%; border-collapse:collapse; font-size:8pt;">
+            <thead>
+                <tr style="background:#f1f5f9; border-bottom:1.5px solid #334155; text-align:left;">
+                    <th style="padding:4px 6px;">Date & Time</th>
+                    <th style="padding:4px 6px;">Farmer Account</th>
+                    <th style="padding:4px 6px;">Diagnosis / Detected Disease</th>
+                    <th style="padding:4px 6px; text-align:center;">Field Status</th>
+                </tr>
+            </thead>
+            <tbody id="bRepScanTableBody">
+                <!-- Injected dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Official Recommendations Section -->
+    <div class="report-footer-section" style="margin-top: 8px;">
+        <h3 class="rm-section-title" style="margin-bottom: 4px; font-size:10pt;">SYSTEM RECOMMENDATIONS & EXTENSION ADVISORY</h3>
+        <div class="rep-recommendation-box" id="bRepRec1" style="font-size:8pt; padding:5px 8px; margin-bottom:3px;">
+            Apply targeted foliar treatment protocols and isolate infected crop zones to contain secondary pathogen dispersion.
+        </div>
+        <div class="rep-recommendation-box" id="bRepRec2" style="font-size:8pt; padding:5px 8px; margin-bottom:3px;">
+            Adjust nitrogen fertilization and maintain regulated water levels to prevent favorable disease humidity conditions.
+        </div>
+        <div class="rep-recommendation-box" style="font-size:8pt; padding:5px 8px;">
+            Coordinate with the Bacnotan Municipal Agricultural Office for subsidized field intervention if conditions persist.
+        </div>
+    </div>
+
+    <!-- Official Footer Certification -->
+    <div style="border-top:1.5px solid #cbd5e1; padding-top:4px; margin-top:6px; display:flex; justify-content:space-between; align-items:center; font-size:7pt; color:#64748b;">
+        <span>System-generated official epidemiological document certified by PalayScan AI Crop Diagnostic Engine.</span>
+        <span>Municipality of Bacnotan, La Union • Republic of the Philippines</span>
+    </div>
+</div>
+
 <script src="api_config.js"></script>
-<script src="admin.js?v=10"></script>
+<script src="admin.js?v=11"></script>
 </body>
 </html>
