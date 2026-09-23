@@ -907,7 +907,7 @@ function renderHeatmapMarkers() {
                     <span style="display:inline-block;padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;background:${style.fillColor}20;color:${style.color};border:1px solid ${style.color};">${style.label}</span>
                 </div>
                 <p style="margin:2px 0;font-size:0.82rem;"><strong>Total Scans:</strong> ${d.total_scans || 0}</p>
-                <p style="margin:2px 0;font-size:0.82rem;"><strong>Diseased:</strong> <span style="color:#ef4444;font-weight:600;">${diseasedTotal}</span> | <strong>Healthy:</strong> <span style="color:#16a34a;font-weight:600;">${d.healthy_scans || 0}</span></p>
+                <p style="margin:2px 0;font-size:0.82rem;"><strong>Unhealthy:</strong> <span style="color:#ef4444;font-weight:600;">${diseasedTotal}</span> | <strong>Healthy:</strong> <span style="color:#16a34a;font-weight:600;">${d.healthy_scans || 0}</span></p>
                 <p style="margin:2px 0;font-size:0.82rem;"><strong>Top Disease:</strong> ${topDiseaseName}</p>
                 
                 <div style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:6px;">
@@ -1478,7 +1478,7 @@ async function openBarangaySummaryModal(barangayName) {
                 </div>
                 <div style="background:#fef2f2;border:1.5px solid #fecaca;padding:14px;border-radius:12px;text-align:center;">
                     <span style="font-size:1.6rem;font-weight:700;color:#991b1b;">${diseasedScans}</span>
-                    <p style="margin:2px 0 0;font-size:0.8rem;color:#b91c1c;font-weight:500;">Diseased Cases</p>
+                    <p style="margin:2px 0 0;font-size:0.8rem;color:#b91c1c;font-weight:500;">Unhealthy Cases</p>
                 </div>
                 <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;padding:14px;border-radius:12px;text-align:center;">
                     <span style="font-size:1.6rem;font-weight:700;color:#166534;">${healthyScans}</span>
