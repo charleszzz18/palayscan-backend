@@ -1,4 +1,4 @@
-# ==========================================
+﻿# ==========================================
 # RICE HEALTH APP - TEXTURE ANALYSIS MODULE
 # ==========================================
 # This file looks for patterns, spots, and edge densities in the image.
@@ -6,9 +6,11 @@
 import cv2 # Computer Vision library | CHANGE: Update if using a different image processing library
 import numpy as np # Numerical math library | CHANGE: Standard dependency
 
-def analyze_texture(img, sensitivity=1.0, return_metrics=False): # Texture analysis function | CHANGE: Add 'min_edge_threshold'
+def analyze_texture(img, sensitivity=1.0, return_metrics=False, leaf_mask=None): # Texture analysis function | CHANGE: Add 'min_edge_threshold'
     """
     Analyze texture patterns in rice to detect potential diseases.
+    If leaf_mask is provided, calculations are restricted strictly to the rice leaf tissue,
+    preventing brown tables, dark soil, or black backgrounds from falsely triggering disease rules.
     """
     # --- 1. PREPARE THE IMAGE ---
     # Convert to grayscale to focus on shapes/lines rather than color
@@ -20,10 +22,6 @@ def analyze_texture(img, sensitivity=1.0, return_metrics=False): # Texture analy
     # --- 2. FIND EDGES (TEXTURE) ---
     # Canny Edge Detection identifies boundaries of spots and lesions.
     edges = cv2.Canny(blurred, 50, 150) # Use Canny algorithm to find edges in the blurred image | CHANGE: (30, 100) for more sensitive detection
-    
-    # Calculate "edge density" - how much of the leaf is textured/spotted
-    hist = cv2.calcHist([edges], [0], None, [256], [0, 256]) # Generate a histogram of edge pixel intensities
-    edge_density = np.sum(hist[50:]) / (img.shape[0] * img.shape[1]) # Calculate ratio of edge pixels to total pixels | CHANGE: Change 50 to 100 for stronger edges only
     
     # --- 3. COLOR PATTERN RECOGNITION ---
     # While color_analysis.py looks at health, we look for specific symptom colors.
@@ -64,16 +62,31 @@ def analyze_texture(img, sensitivity=1.0, return_metrics=False): # Texture analy
     upper_gray = np.array([180, 30, 180]) # Define upper bound for gray lesions (darker gray) | CHANGE: [180, 50, 200]
     gray_mask = cv2.inRange(hsv, lower_gray, upper_gray) # Create a mask for gray pixels
     
-    # --- 4. CALCULATE RATIOS ---
-    # Find percentage of image covered by each symptom color
-    total_pixels = img.shape[0] * img.shape[1] # Calculate the total number of pixels in the image
-    raw_brown = float(cv2.countNonZero(brown_mask)) / total_pixels if total_pixels > 0 else 0
-    raw_straw = float(cv2.countNonZero(straw_mask)) / total_pixels if total_pixels > 0 else 0
-    raw_black = float(cv2.countNonZero(black_mask)) / total_pixels if total_pixels > 0 else 0
-    raw_white = float(cv2.countNonZero(white_mask)) / total_pixels if total_pixels > 0 else 0
-    raw_yellow = float(cv2.countNonZero(yellow_mask)) / total_pixels if total_pixels > 0 else 0
-    raw_orange = float(cv2.countNonZero(orange_mask)) / total_pixels if total_pixels > 0 else 0
-    raw_gray = float(cv2.countNonZero(gray_mask)) / total_pixels if total_pixels > 0 else 0
+    # --- 4. CALCULATE RATIOS (CONSTRAINED TO LEAF IF AVAILABLE) ---
+    if leaf_mask is not None and cv2.countNonZero(leaf_mask) > 100:
+        norm_pixels = cv2.countNonZero(leaf_mask)
+        raw_brown  = float(cv2.countNonZero(cv2.bitwise_and(brown_mask, leaf_mask))) / norm_pixels
+        raw_straw  = float(cv2.countNonZero(cv2.bitwise_and(straw_mask, leaf_mask))) / norm_pixels
+        raw_black  = float(cv2.countNonZero(cv2.bitwise_and(black_mask, leaf_mask))) / norm_pixels
+        raw_white  = float(cv2.countNonZero(cv2.bitwise_and(white_mask, leaf_mask))) / norm_pixels
+        raw_yellow = float(cv2.countNonZero(cv2.bitwise_and(yellow_mask, leaf_mask))) / norm_pixels
+        raw_orange = float(cv2.countNonZero(cv2.bitwise_and(orange_mask, leaf_mask))) / norm_pixels
+        raw_gray   = float(cv2.countNonZero(cv2.bitwise_and(gray_mask, leaf_mask))) / norm_pixels
+
+        edges_in_leaf = cv2.bitwise_and(edges, leaf_mask)
+        edge_density = float(np.sum(edges_in_leaf > 0)) / norm_pixels
+    else:
+        total_pixels = img.shape[0] * img.shape[1] # Calculate the total number of pixels in the image
+        raw_brown  = float(cv2.countNonZero(brown_mask)) / total_pixels if total_pixels > 0 else 0
+        raw_straw  = float(cv2.countNonZero(straw_mask)) / total_pixels if total_pixels > 0 else 0
+        raw_black  = float(cv2.countNonZero(black_mask)) / total_pixels if total_pixels > 0 else 0
+        raw_white  = float(cv2.countNonZero(white_mask)) / total_pixels if total_pixels > 0 else 0
+        raw_yellow = float(cv2.countNonZero(yellow_mask)) / total_pixels if total_pixels > 0 else 0
+        raw_orange = float(cv2.countNonZero(orange_mask)) / total_pixels if total_pixels > 0 else 0
+        raw_gray   = float(cv2.countNonZero(gray_mask)) / total_pixels if total_pixels > 0 else 0
+
+        hist = cv2.calcHist([edges], [0], None, [256], [0, 256]) # Generate a histogram of edge pixel intensities
+        edge_density = np.sum(hist[50:]) / total_pixels if total_pixels > 0 else 0
 
     brown_ratio = raw_brown * sensitivity
     straw_ratio = raw_straw * sensitivity

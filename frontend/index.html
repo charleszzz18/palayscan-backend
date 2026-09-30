@@ -97,10 +97,14 @@
 
         <div class="report-main-grid">
             <div class="report-left-col">
-                <h3 class="rm-section-title">INFECTION SPREAD</h3>
+                <h3 class="rm-section-title">INFECTION LEVEL</h3>
                 <div class="rep-score-circle" id="repScoreCircle">
-                    <span class="rep-score-value" id="repScoreValue"></span>
-                    <span class="rep-score-label">INFECTION SPREAD</span>
+                    <span class="rep-score-value" id="repScoreValue" style="font-size: 20pt;"></span>
+                    <span class="rep-score-label" id="repScoreLabel">INFECTION LEVEL</span>
+                </div>
+                <div class="rep-breakdown-box" style="margin: 8px 0; font-size: 8.5pt; color: #334155; line-height: 1.6; background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                    <div><strong>Healthy Percentage =</strong> <span id="repHealthyPct" style="color: #16a34a; font-weight: bold;"></span></div>
+                    <div><strong>Not Healthy Detected =</strong> <span id="repNotHealthyPct" style="font-weight: bold;"></span></div>
                 </div>
                 <div class="rep-overall-assessment">
                     <strong>Overall Field Assessment:</strong> <span id="repAssessment"></span>

@@ -9,3 +9,6 @@ __pycache__/
 *.exe
 *.npy
 .vscode/
+
+database_backup.json
+backend/database_backup.json

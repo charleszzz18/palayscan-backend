@@ -434,6 +434,29 @@ function renderResults(data) {
         ? parseFloat(data.infected_area_pct).toFixed(1)
         : (isHealthy ? "0.0" : Math.max(0, (100 - parseFloat(healthScore))).toFixed(1));
     const infectionSpreadPct = isHealthy ? "0%" : `${infectedArea}%`;
+
+    // Categorical Severity and Detailed Percentage Breakdown:
+    // 0% - 5%: Low
+    // 6% - 15%: Moderate
+    // 16% - 100%: High
+    const notHealthyDetectedNum = isHealthy ? 0.0 : Math.max(0, Math.min(100, parseFloat(infectedArea)));
+    const healthyPercentageNum = Math.max(0, Math.min(100, 100 - notHealthyDetectedNum));
+    const notHealthyDetectedStr = `${notHealthyDetectedNum.toFixed(1)}%`;
+    const healthyPercentageStr = `${healthyPercentageNum.toFixed(1)}%`;
+
+    let severityLevel = "Low";
+    let severityColor = "#22c55e"; // Green
+    if (notHealthyDetectedNum > 15.0) {
+        severityLevel = "High";
+        severityColor = "#ef4444"; // Red
+    } else if (notHealthyDetectedNum > 5.0) {
+        severityLevel = "Moderate";
+        severityColor = "#f59e0b"; // Amber/Orange
+    } else {
+        severityLevel = "Low";
+        severityColor = "#22c55e"; // Green
+    }
+
     const hotspots = (data.lesion_hotspots && data.lesion_hotspots.length > 0)
         ? data.lesion_hotspots
         : (!isHealthy ? [
@@ -462,12 +485,30 @@ function renderResults(data) {
         ? `${apiBase}/reference-image/${encodeURIComponent(primaryDisease)}`
         : null;
 
-    // 4.1 Infection Spread Percentage Card
+    // 4.1 Categorical Infection Level Circle & Percentage Breakdown
     let resultHTML = `<h3>Analysis Report</h3>
         <div class="score-container">
-            <div class="score-circle ${isHealthy ? 'healthy' : 'unhealthy'}" style="--score-percent: ${isHealthy ? 0 : Math.min(100, Math.max(5, parseFloat(infectedArea)))}; --score-color: ${isHealthy ? 'var(--primary)' : 'var(--danger)'}">
-                <span class="score-value" style="font-size: 2.8rem; font-weight: 900; line-height: 1.1;">${infectionSpreadPct}</span>
-                <span class="score-label" style="font-weight: 700; margin-top: 6px; font-size: 0.85rem; letter-spacing: 1px;">Infection Spread</span>
+            <div class="score-circle ${isHealthy ? 'healthy' : 'unhealthy'}" style="--score-percent: ${Math.min(100, Math.max(8, notHealthyDetectedNum))}; --score-color: ${severityColor};">
+                <span class="score-value" style="font-size: clamp(1.8rem, 4.5vw, 2.3rem); font-weight: 900; line-height: 1.1; color: ${severityColor}; letter-spacing: -0.5px;">${severityLevel}</span>
+                <span class="score-label" style="font-weight: 700; margin-top: 6px; font-size: 0.85rem; letter-spacing: 1px; color: #64748b;">Infection Level</span>
+            </div>
+
+            <div class="percentage-breakdown-card">
+                <div class="breakdown-row">
+                    <span class="breakdown-label">
+                        <span class="status-dot green"></span>
+                        Healthy Percentage =
+                    </span>
+                    <span class="breakdown-val val-healthy">${healthyPercentageStr}</span>
+                </div>
+                <div class="breakdown-divider"></div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">
+                        <span class="status-dot ${severityLevel.toLowerCase()}"></span>
+                        Not Healthy Detected =
+                    </span>
+                    <span class="breakdown-val val-${severityLevel.toLowerCase()}">${notHealthyDetectedStr}</span>
+                </div>
             </div>
         </div>`;
 
@@ -655,7 +696,7 @@ function renderResults(data) {
                             <div class="popover-specs">
                                 <p class="popover-why"><strong id="popoverWhyLabel">Why Flagged:</strong> <span id="popoverWhyText">${whyDetected}</span></p>
                                 <div class="popover-signs"><strong>Key Signs:</strong> <span id="popoverSignsText">${diseaseSymptom}</span></div>
-                                <span class="popover-damage">Infection Spread: ${infectionSpreadPct} (${parseFloat(infectedArea) > 15 ? 'High' : (parseFloat(infectedArea) > 0 ? 'Low' : 'None')})</span>
+                                <span class="popover-damage">Infection Level: ${severityLevel} (Not Healthy: ${notHealthyDetectedStr})</span>
                             </div>
                         </div>
 
@@ -726,8 +767,18 @@ function renderResults(data) {
         document.getElementById("repDate").innerText = formattedScanDate;
         document.getElementById("repLocation").innerText = _user.barangay ? `${_user.barangay}, Bacnotan` : "Bacnotan, La Union";
 
-        // Infection Spread Percentage and Categorical Status
-        document.getElementById("repScoreValue").innerText = infectionSpreadPct;
+        // Infection Level and Detailed Percentage Breakdown
+        document.getElementById("repScoreValue").innerText = severityLevel;
+        if (document.getElementById("repScoreLabel")) {
+            document.getElementById("repScoreLabel").innerText = "INFECTION LEVEL";
+        }
+        if (document.getElementById("repHealthyPct")) {
+            document.getElementById("repHealthyPct").innerText = healthyPercentageStr;
+        }
+        if (document.getElementById("repNotHealthyPct")) {
+            document.getElementById("repNotHealthyPct").innerText = notHealthyDetectedStr;
+            document.getElementById("repNotHealthyPct").style.color = severityColor;
+        }
 
         let primaryDisease = data.primary_disease || (data.confirmed_diseases && data.confirmed_diseases[0]) || (data.visual_matches && data.visual_matches[0] && data.visual_matches[0].name) || (data.diseases && data.diseases[0]) || (isHealthy ? "Healthy" : "Infected Leaf");
         let matchRating = "High";

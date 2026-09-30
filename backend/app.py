@@ -637,12 +637,14 @@ def analyze_rice_health(img, weather_condition="hot"):
     health_score, healthy_mask, unhealthy_mask, stage, bad_background = analyze_color(img)
     lesion_hotspots = extract_lesion_hotspots(unhealthy_mask)
     
-    # Check for background validation failure immediately
+    # Check for background and rice leaf validation failure immediately
     if bad_background:
-        if bad_background == "complex":
+        if bad_background == "no_leaf":
+            message = "No rice leaf detected in this image. Please capture a clear, focused photo of a single rice leaf."
+        elif bad_background == "complex":
             message = "The leaf shape appears too complex, spiky, or scattered (like a weed flower or whole plant). Please take a clear, focused close-up of a single smooth rice leaf."
         else:
-            message = f"The background of your image is too {bad_background}. Please take a picture of the leaf with a clear, contrasting background (avoiding too much {bad_background} color) for accurate analysis."
+            message = f"The background of your image is too {bad_background}. Please take a picture of the leaf with a clear, contrasting background for accurate analysis."
             
         return {
             "is_valid": False,
@@ -658,27 +660,53 @@ def analyze_rice_health(img, weather_condition="hot"):
     _, buffer = cv2.imencode('.jpg', highlighted, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
     highlighted_image_uri = f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
 
+    # Construct the isolated leaf mask to isolate texture & symptom metrics strictly to the rice leaf
+    final_leaf_mask = None
+    if healthy_mask is not None and unhealthy_mask is not None:
+        final_leaf_mask = cv2.bitwise_or(healthy_mask, unhealthy_mask)
+
     # 7.2 Weather Sensitivity tuning
     # Cold temperatures reduce crop metabolism, lowering thresholds. Hot/Dry climates alter patterns.
+    # Pass leaf_mask so brown desks, soil, or black backgrounds do not trigger false diseases
     if weather_condition == "cold":
         health_threshold = 0.1
-        texture_diseases, tex_metrics = analyze_texture(img, sensitivity=1.2, return_metrics=True)
+        texture_diseases, tex_metrics = analyze_texture(img, sensitivity=1.2, return_metrics=True, leaf_mask=final_leaf_mask)
     else:
         health_threshold = 0.7
-        texture_diseases, tex_metrics = analyze_texture(img, sensitivity=1.0, return_metrics=True)
+        texture_diseases, tex_metrics = analyze_texture(img, sensitivity=1.0, return_metrics=True, leaf_mask=final_leaf_mask)
 
     brown_ratio = tex_metrics['brown_ratio']
     gray_ratio  = tex_metrics['gray_ratio']
     straw_ratio = tex_metrics['straw_ratio']
     white_ratio = tex_metrics['white_ratio']
 
+    # Crop strictly to the isolated leaf blade so background desk/wall does not corrupt DL inference
+    dl_input_img = img
+    if final_leaf_mask is not None and cv2.countNonZero(final_leaf_mask) > 100:
+        x, y, w, h = cv2.boundingRect(final_leaf_mask)
+        pad_x = int(w * 0.05)
+        pad_y = int(h * 0.05)
+        x1 = max(0, x - pad_x)
+        y1 = max(0, y - pad_y)
+        x2 = min(img.shape[1], x + w + pad_x)
+        y2 = min(img.shape[0], y + h + pad_y)
+        if (x2 - x1) > 20 and (y2 - y1) > 20:
+            dl_input_img = img[y1:y2, x1:x2]
+
     # 7.3 Deep Learning Identification (MobileNetV2)
     from dl_analysis import analyze_with_dl
-    dl_disease, dl_confidence, dl_all_preds = analyze_with_dl(img, return_all_preds=True)
+    dl_disease, dl_confidence, dl_all_preds = analyze_with_dl(dl_input_img, return_all_preds=True)
     if dl_disease == "Leaf Strip":
         dl_disease = "Leaf Streak"
     if "Leaf Strip" in dl_all_preds:
         dl_all_preds["Leaf Streak"] = dl_all_preds.pop("Leaf Strip")
+
+    # If the deep learning model identified 'Others' (non-leaf / background / non-rice object)
+    if dl_disease == "Others" or dl_all_preds.get("Others", 0.0) >= 0.40:
+        return {
+            "is_valid": False,
+            "message": "This image does not appear to be a rice leaf or recognized rice condition. Please upload a clear photo of a rice leaf."
+        }
 
     SUPPORTED_DISEASES = ["Blight", "Blast", "Brown Spot", "Leaf Streak", "Leaf Strip", "Healthy"]
     if dl_disease and dl_disease not in SUPPORTED_DISEASES:
@@ -687,19 +715,18 @@ def analyze_rice_health(img, weather_condition="hot"):
     # Deep Learning Model (MobileNetV2) provides primary diagnosis across supported classes
 
     # PHASE 1: Image Validation (Out of distribution check)
-    # Only reject if BOTH deep learning confidence is extremely low AND visual similarity is below 0.15
-    if dl_confidence < 0.25:
-        raw_visual_matches = image_comparator.get_matching_diseases(img, threshold=0.0, max_matches=1)
-        top_visual_score = raw_visual_matches[0][1] if raw_visual_matches else 0.0
-        
-        if top_visual_score < 0.15:
-            return {
-                "is_valid": False,
-                "message": "This image does not appear to be a clear rice leaf. Please upload a clear, focused picture of a rice leaf for accurate analysis."
-            }
+    raw_visual_matches = image_comparator.get_matching_diseases(dl_input_img, threshold=0.0, max_matches=1)
+    top_visual_score = raw_visual_matches[0][1] if raw_visual_matches else 0.0
+    
+    # Reject if DL model is uncertain across all classes AND visual similarity to rice disease database is weak
+    if (dl_confidence < 0.35 and top_visual_score < 0.35) or (dl_confidence < 0.25 and top_visual_score < 0.45):
+        return {
+            "is_valid": False,
+            "message": "This image does not appear to be a clear rice leaf. Please upload a clear, focused picture of a rice leaf for accurate analysis."
+        }
 
     # Resolve visual matches and merge heuristics
-    visual_matches = image_comparator.get_matching_diseases(img, threshold=0.30, max_matches=3)
+    visual_matches = image_comparator.get_matching_diseases(dl_input_img, threshold=0.30, max_matches=3)
     visual_matches = [(d, s) for d, s in visual_matches if d in SUPPORTED_DISEASES]
     top_visual_disease = visual_matches[0][0] if visual_matches else None
     top_visual_score = visual_matches[0][1] if visual_matches else 0.0
