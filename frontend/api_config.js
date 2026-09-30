@@ -2,4 +2,4 @@
 // PALAYSCAN API CONFIGURATION
 // =========================================================================
 // Auto-configured by PalayScan Launcher
-const API_BASE_URL = 'https://effect-status-canyon-existing.trycloudflare.com';
+const API_BASE_URL = 'https://identify-charleston-pentium-ver.trycloudflare.com';
